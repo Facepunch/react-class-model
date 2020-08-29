@@ -1,4 +1,4 @@
-# react-class-model
+# react-class-model [![npm version](https://badge.fury.io/js/react-class-model.svg)](https://www.npmjs.com/package/react-class-model)
 State management for React with hooks, inspired by Flutter's scoped_model
 
 ## Example
@@ -78,6 +78,7 @@ function RootComponent() {
 function TeamComponent() {
     const team = useTeam();
 
+    // The team variable will have a reference to the Team class
     // Can render out the team here now
     // It will automatically re-render when the model is changed
 }
