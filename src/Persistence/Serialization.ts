@@ -202,7 +202,11 @@ function keysMatch(persistence: Persistence, obj: object, props: any) {
 
 function equals(x: object, y: object) {
     // for any class that has an equals method - x.equals(y)
-    if (x.constructor === y.constructor && typeof x['equals'] === 'function') {
+    if (typeof x === 'object' &&
+        typeof y === 'object' &&
+        x.constructor === y.constructor &&
+        typeof x['equals'] === 'function'
+    ) {
         return !!x['equals'](y);
     }
 
