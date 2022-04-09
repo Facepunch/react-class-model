@@ -18,7 +18,10 @@ type DefineResult<T extends Model> = [
     Context<T>
 ];
 
-// Base class for your models. Derive from this and call notifyListeners() when you change data.
+/**
+ * Base class for your models. Derive from this and call {@link notifyListeners()} when you change data to notify consumers.
+ * @see {@link watch} for a field decorator which automatically calls {@link notifyListeners()} when specific fields are updated.
+ */
 export abstract class Model {
     private version: number = 1;
     private listeners: Listener[] = [];
@@ -70,7 +73,9 @@ export abstract class Model {
     }
 }
 
-// Decorator which injects calls to notifyListeners() automatically when the field value is changed.
+/**
+ * Field decorator which injects calls to {@link Model.notifyListeners()} automatically when the field value is changed.
+ */
 export function watch<T extends Model>(target: T, propertyKey: string | symbol, prevDesc?: any): any {
     let initializer = prevDesc && prevDesc.initializer;
     const getValue = (instance: any) => {
@@ -102,7 +107,10 @@ export function watch<T extends Model>(target: T, propertyKey: string | symbol, 
     return descriptor;
 }
 
-// Define a Model type and assigns it a React Context archetype. Returns the provider component and hook to get the model instance.
+/**
+ * Define a Model type, assigns it a React Context archetype, and builds hooks to interact with it.
+ * @returns The context provider component, a hook to get the model instance from a provider, and a hook to watch for changes on an instance of the model.
+ */
 export function defineModel<T extends Model>(): DefineResult<T> {
     const context = createContext<T>(null);
     
