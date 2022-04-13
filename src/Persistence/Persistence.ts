@@ -1,12 +1,19 @@
-import { ConstructorBinder } from './CommonTypes';
+import { Deserializer, InPlaceDeserializer, Serializer } from './CommonTypes';
 import { Field } from './Field';
 
 export class Persistence {
-    public binder: ConstructorBinder;
+    public serialize: Serializer | null = null;
+    public deserialize: Deserializer | null = null;
+    public deserializeInto: InPlaceDeserializer | null = null;
+
     public fields: Map<string, Field> = new Map();
     public keys: string[] = [];
 
     public add(name: string, field: Field) {
+        if (this.serialize || this.deserialize || this.deserializeInto) {
+            throw new Error('setupPersistence was called for a model type - cannot continue.');
+        }
+        
         if (this.fields.has(name)) {
             throw new Error(`Duplicate field with name '${name}'`);
         }

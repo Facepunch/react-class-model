@@ -20,7 +20,7 @@ type DefineResult<T extends Model> = [
 
 /**
  * Base class for your models. Derive from this and call {@link notifyListeners()} when you change data to notify consumers.
- * @see {@link watch} for a field decorator which automatically calls {@link notifyListeners()} when specific fields are updated.
+ * @see The {@link watch()} field decorator automatically calls {@link notifyListeners()} when the field it is applied to are updated.
  */
 export abstract class Model {
     private version: number = 1;

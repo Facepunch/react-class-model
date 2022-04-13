@@ -1,5 +1,6 @@
-import { Constructor, Getter, Setter } from './CommonTypes';
+import { Constructor, DeserializeResult, Getter, Setter } from './CommonTypes';
 import { getPersistence, throwPersistenceRequired } from './Persistence';
+import { deserializeCopy } from './Serialization';
 
 export class Field {
     public ctor: Constructor<any>;
@@ -14,25 +15,30 @@ export class Field {
         this.copy = copy;
         this.get = get;
         this.set = set;
-    }
+    } 
 
-    public construct(props: any) {
-        if (!this.ctor) {
-            return props;
+    public deserialize(props: any, current: any): DeserializeResult {
+        if (props === undefined || props === null || !this.ctor) {
+            return [props !== current, props];
         }
 
         const persistence = getPersistence(this.ctor);
-        if (persistence && persistence.binder) {
-            return new this.ctor(...persistence.binder(props));
-        } else if (typeof props === 'object') {
-            if (!persistence) {
-                throwPersistenceRequired(this.ctor);
-                return;
-            }
-            
-            return new this.ctor(...persistence.keys.map(key => props[key]));
-        } else {
-            return new this.ctor(props);
+        if (!persistence) {
+            throwPersistenceRequired(this.ctor);
+            return; // not reachable
         }
+
+        if (current && persistence.deserializeInto) {
+            const changed = persistence.deserializeInto(props, current);
+            return [changed, current];
+        }
+
+        if (persistence.deserialize) {
+            return persistence.deserialize(props);
+        }
+
+        const value = current ?? new this.ctor();
+        const changed = deserializeCopy(persistence, value, props);
+        return [changed, value];
     }
 }

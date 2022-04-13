@@ -1,4 +1,4 @@
-import { Constructor, AnyTyped, ConstructorBinder } from './CommonTypes';
+import { Constructor, AnyTyped, Serializer, Deserializer, InPlaceDeserializer } from './CommonTypes';
 import { requirePersistence, getPersistence } from './Persistence';
 import { Model } from '../Model';
 import { toSerializable, deserializeCopy } from './Serialization';
@@ -55,22 +55,22 @@ interface PropParams {
     /**
      * Specifies the expected type of this field. Required if the field is not a primitive type.
      */
-    ctor?: Constructor<any>;
+    readonly ctor?: Constructor<any>;
 
     /**
      * Disables serialization of this field but allows deserialization.
      */
-    transient?: boolean;
+    readonly transient?: boolean;
 
     /**
      * Overrides the name of this field when serialized to JSON.
      */
-    key?: string;
+    readonly key?: string;
 
     /**
      * Disables deserialization processing on this field's value. Deserialization will copy the value as-is from the parsed JSON without performing merging etc.
      */
-    copy?: boolean;
+    readonly copy?: boolean;
 }
 
 /**
@@ -83,7 +83,7 @@ export function prop(props?: PropParams) {
     const key = props && props.key;
     const copy = props && props.copy;
     
-    return <T>(target: T, propertyName: string) => {
+    return <T>(target: T, propertyName: string, ...a: any[]) => {
         const field = new Field(ctor, transient, copy,
             instance => instance[propertyName],
             (instance, value) => instance[propertyName] = value);
@@ -97,85 +97,33 @@ export function prop(props?: PropParams) {
  * This allows instances within arrays to be updated without creating a new instance of the model.
  * Multiple fields may be marked as keys to form a composite key.
  */
-export function key<T extends Model>(target: T, propertyKey: string, prevDesc?: any): any {
+export function key<T>(target: T, propertyKey: string, prevDesc?: any): any {
     const persistence = getPersistence(target, true);
     persistence.keys.push(propertyKey);
 }
 
-interface PersistenceAccessor<T> {
-    /**
-     * Reads the value of a field from the instance and returns the value to store in the serialized JSON.
-     * This may be used to perform extra mapping logic when serializing.
-     */
-    get: (instance: T) => any;
+interface SerializationOptions<T> {
+    readonly serialize: Serializer<T>;
 
-    /**
-     * Writes a new value to a field in the instance from the serialized JSON.
-     * This may be used to perform extra mapping logic when deserializing.
-     */
-    set: (instance: T, value: any) => void;
-}
+    readonly deserialize: Deserializer<T>;
 
-interface PersistenceInit<T> {
-    /**
-     * Must be set if this type must be instantiated through its constructor.
-     * Can be set to a list of the field names to use for constructor arguments if deserializing from an object.
-     * Otherwise, set this to a function which returns the constructor arguments to use.
-     */
-    binder?: ConstructorBinder | (keyof T & string)[],
-
-    /**
-     * Mapping of fields in instances of this type which will be handled by serialization.
-     * @remarks The key is the name of the value in the JSON.
-     */
-    fields: {
-        [name: string]: keyof T | PersistenceAccessor<T>;
-    };
+    readonly deserializeInto?: InPlaceDeserializer<T>;
 }
 
 /**
- * Sets up custom serialization/deserialization behavior for a type.
+ * Sets up custom serialization/deserialization behavior for a primitive-like type.
  * @param ctor The field type being set up.
- * @param init Configuration for how to treat fields of this type.
+ * @param options Options for how to handle serialization for fields of this type.
+ * @remarks Model serialization is handled automatically using the {@link prop()} decorator so you should not call this for models.
  */
-export function setupPersistence<T>(ctor: Constructor<T>, init: PersistenceInit<T>) {
+export function setupSerialization<T>(ctor: Constructor<T>, options: SerializationOptions<T>) {
     const persistence = getPersistence(ctor, true);
-    
-    if (Array.isArray(init.binder)) {
-        if (persistence.keys.length > 0) {
-            console.warn('setupPersistence: keys already defined on type, overwriting');
-        }
 
-        persistence.keys = init.binder;
-    } else if (init.binder) {
-        if (persistence.binder) {
-            console.warn('setupPersistence: binder already defined on type, overwriting');
-        }
-
-        persistence.binder = init.binder;
+    if (persistence.fields.size > 0) {
+        throw new Error('The provided type has fields defined - you should not call setupPersistence for model types.');
     }
-
-    for (const name in init.fields) {
-        if (persistence.fields.has(name)) {
-            console.warn(`setupPersistence: field ${name} alredy defined on type, ignoring`);
-            continue;
-        }
-
-        const fieldInit = init.fields[name];
-
-        const getter = isAccessor(fieldInit)
-            ? fieldInit.get
-            : (instance: T) => instance[fieldInit];
-
-        const setter = isAccessor(fieldInit)
-            ? fieldInit.set
-            : (instance: T, value: any) => instance[fieldInit] = value;
-
-        const field = new Field(null, false, false, getter, setter);
-        persistence.fields.set(name, field);
-    }
-}
-
-function isAccessor<T>(name: keyof T | PersistenceAccessor<T>): name is PersistenceAccessor<T> {
-    return typeof name !== 'string';
+        
+    persistence.serialize = options.serialize;
+    persistence.deserialize = options.deserialize;
+    persistence.deserializeInto = options.deserializeInto;
 }

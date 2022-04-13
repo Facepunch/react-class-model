@@ -6,6 +6,11 @@
     "module": "es6",
     "declaration": true,
     "outDir": "./dist",
-    "experimentalDecorators": true
-  }
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "allowJs": true,
+  },
+  "exclude": [
+    "src/**/*.test.ts",
+  ],
 }

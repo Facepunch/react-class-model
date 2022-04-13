@@ -1,37 +1,42 @@
 import { Persistence, getPersistence, requirePersistence } from './Persistence';
 import { Field } from './Field';
 import isEqual from 'lodash-es/isEqual';
+import { Model } from '../Model';
 
 export function toSerializable<T>(instance: T) {
-    if (typeof instance === 'string' || typeof instance === 'number' || typeof instance === 'boolean') {
+    if (instance === undefined ||
+        instance === null ||
+        typeof instance === 'string' ||
+        typeof instance === 'number' ||
+        typeof instance === 'boolean'
+    ) {
         return instance;
     }
 
-    const persistence = requirePersistence(instance);
-    const result = {} as any;
+    if (typeof instance !== 'object') {
+        throw new Error(`Cannot serialize ${typeof instance}`);
+    }
 
+    const persistence = requirePersistence(instance);
+    if (persistence.serialize) {
+        return persistence.serialize(instance);
+    }
+
+    const result = {} as any;
     for (const [name, field] of persistence.fields.entries()) {
         if (field.transient) {
             continue;
         }
         
         let value = field.get(instance);
-        if (!value && typeof value !== 'boolean') {
+        if (value === undefined) {
             continue;
         }
 
-        switch (typeof value) {
-            case 'object':
-                if (Array.isArray(value)) {
-                    value = value.map(toSerializable);
-                } else {
-                    value = toSerializable(value);
-                }
-                break;
-            case 'function':
-                throw new Error('Cannot serialize functions');
-            case 'symbol':
-                throw new Error('Cannot serialize symbols');
+        if (Array.isArray(value)) {
+            value = value.map(toSerializable);
+        } else {
+            value = toSerializable(value);
         }
 
         result[name] = value;
@@ -44,12 +49,12 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
     let changed = false;
 
     for (const [name, field] of persistence.fields.entries()) {
-        let currentProp = field.get(current);
-        let newProp = props[name];
-
-        if (typeof newProp === 'undefined') {
+        if (typeof props === 'object' && !props.hasOwnProperty(name)) {
             continue;
         }
+
+        let currentProp = field.get(current);
+        let newProp = props[name];
 
         if (field.copy) {
             field.set(current, newProp);
@@ -72,11 +77,9 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
                     }
                 } else if (objPersistence) {
                     currentProp = newProp.map((item, index) => {
-                        const value = (currentProp && currentProp[index]) || field.construct(item);
-                        if (deserializeCopy(objPersistence, value, item)) {
-                            changed = true;
-                        }
-                        return value;
+                        const [updated, newValue] = field.deserialize(item, currentProp?.[index]);
+                        changed = changed || updated;
+                        return newValue;
                     });
 
                     if (changed) {
@@ -92,34 +95,23 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
                     continue;
                 }
 
-                if (!newProp) {
-                    if (currentProp != newProp) {
-                        changed = true;
-                    }
-                    
-                    field.set(current, newProp);
-                } else {
-                    if (!currentProp) {
-                        currentProp = field.construct(newProp);
-                        field.set(current, currentProp);
-                    }
-                    
-                    if (deserializeCopy(objPersistence, currentProp, newProp)) {
-                        changed = true;
-                    }
+                const [updated, newValue] = field.deserialize(newProp, currentProp);
+                if (updated) {
+                    field.set(current, newValue);
+                    changed = true;
                 }
             }
         } else {
-            newProp = field.construct(newProp);
-            if (!equals(currentProp, newProp)) {
-                field.set(current, newProp);
+            const [updated, newValue] = field.deserialize(newProp, currentProp);
+            if (updated) {
+                field.set(current, newValue);
                 changed = true;
             }
         }
     }
 
-    if (changed && typeof current['notifyListeners'] === 'function') {
-        current['notifyListeners']();
+    if (changed && current instanceof Model) {
+        current.notifyListeners();
     }
 
     return changed;
@@ -156,12 +148,16 @@ function mergeArray(persistence: Persistence, field: Field, dest: any[], source:
                     dest.push(oldItem); // save it for later
                 }
 
-                dest[i] = field.construct(newItem);
-                deserializeCopy(persistence, dest[i], newItem);
+                const [_, newValue] = field.deserialize(newItem, undefined);
+                dest[i] = newValue;
                 changed = true;
             } else {
                 // swap
-                dest[i] = dest[found];
+                if (i !== found) {
+                    dest[i] = dest[found];
+                    changed = true;
+                }
+
                 if (oldItem) {
                     dest[found] = oldItem;
                 } else {
