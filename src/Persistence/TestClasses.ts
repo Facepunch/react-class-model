@@ -1,4 +1,5 @@
 import { key, prop } from '.';
+import { Model, watch } from '../Model';
 
 export class Point {
     @prop()
@@ -49,5 +50,24 @@ export class Player {
 
 export class Team {
     @prop({ ctor: Player })
+    public members: Player[];
+}
+
+export class PlayerModel extends Model {
+    @prop() @watch @key
+    public id: number;
+
+    @prop() @watch
+    public name: string;
+
+    constructor(id?: number, name?: string) {
+        super();
+        this.id = id;
+        this.name = name;
+    }
+}
+
+export class TeamModel extends Model {
+    @prop({ ctor: PlayerModel }) @watch
     public members: Player[];
 }

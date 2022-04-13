@@ -49,7 +49,7 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
     let changed = false;
 
     for (const [name, field] of persistence.fields.entries()) {
-        if (typeof props === 'object' && !props.hasOwnProperty(name)) {
+        if (typeof props === 'object' && !hasProperty(props, name)) {
             continue;
         }
 
@@ -217,4 +217,22 @@ function equals(x: object, y: object) {
     }
 
     return isEqual(x, y);
+}
+
+const hasOwnProperty = Object.prototype.hasOwnProperty;
+function hasProperty(value: object, name: string): boolean {
+    if (typeof value !== 'object' || Array.isArray(value) || value == null) {
+        return false; // not an object
+    }
+
+    if (hasOwnProperty.call(value, name)) {
+        return true;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype) {
+        return hasProperty(prototype, name);
+    }
+
+    return false;
 }

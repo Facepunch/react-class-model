@@ -1,7 +1,7 @@
 import { setupSerialization } from '..';
 import { requirePersistence } from '../Persistence';
 import { deserializeCopy, toSerializable } from '../Serialization';
-import { Line, NumberList, Player, Point, PointList, Team } from '../TestClasses';
+import { Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel } from '../TestClasses';
 
 describe('#toSerializable', () => {
     describe('primitives', () => {
@@ -85,6 +85,7 @@ describe('#deserializeCopy', () => {
     const numberListPersistence = requirePersistence(NumberList);
     const pointListPersistence = requirePersistence(PointList);
     const teamPersistence = requirePersistence(Team);
+    const teamModelPersistence = requirePersistence(TeamModel);
 
     describe('primitives', () => {
         it('clears primitive fields to undefined', () => {
@@ -278,6 +279,84 @@ describe('#deserializeCopy', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
             const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
+            expect(changed).toBe(false);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toBe(player1);
+            expect(team.members[1]).toBe(player2);
+            expect(team.members[2]).toBe(player3);
+        });
+    });
+
+    describe('array merging with models', () => {
+        const player1 = new PlayerModel(1, 'One');
+        const player2 = new PlayerModel(2, 'Two');
+        const player3 = new PlayerModel(3, 'Three');
+
+        it('populated objects in keyed array fields', () => {
+            const team = new TeamModel();
+            expect(team.members).toBeUndefined();
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toStrictEqual(player1);
+            expect(team.members[1]).toStrictEqual(player2);
+            expect(team.members[2]).toStrictEqual(player3);
+        });
+
+        it('updates objects in keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: 'Player A' }, player2, player3] });
+            expect(changed).toBe(true);
+            expect(team.members[0].name).toBe('Player A');
+        });
+
+        it('adds new objects to keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player2];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toStrictEqual(player1);
+            expect(team.members[1]).toStrictEqual(player2);
+            expect(team.members[2]).toStrictEqual(player3);
+        });
+
+        it('removes old objects from keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [player3] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(1);
+            expect(team.members[0]).toStrictEqual(player3);
+        });
+
+        it('reorders objects in keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [player3, player1, player2] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toBe(player3);
+            expect(team.members[1]).toBe(player1);
+            expect(team.members[2]).toBe(player2);
+        });
+
+        it('reorders and updates objects in keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1' }, { id: 2, name: '2' }] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
+            expect(team.members[1]).toMatchObject({ id: 1, name: '1' });
+            expect(team.members[2]).toMatchObject({ id: 2, name: '2' });
+        });
+
+        it('returns false if objects in keyed array field are unchanged', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
             expect(changed).toBe(false);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toBe(player1);

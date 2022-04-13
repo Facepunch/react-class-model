@@ -88,7 +88,7 @@ export function watch<T extends Model>(target: T, propertyKey: string | symbol, 
         return instance.props.get(propertyKey);
     };
 
-    const descriptor = {
+    const descriptor: PropertyDescriptor = {
         get() {
             return getValue(this);
         },
@@ -100,6 +100,8 @@ export function watch<T extends Model>(target: T, propertyKey: string | symbol, 
                 this.notifyListeners();
             }
         },
+
+        enumerable: true,
     };
 
     delete target[propertyKey];
