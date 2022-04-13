@@ -103,10 +103,23 @@ export function key<T>(target: T, propertyKey: string, prevDesc?: any): any {
 }
 
 interface SerializationOptions<T> {
+    /**
+     * Function which returns a value which represents the given instance of {@link T}.
+     * @remarks The returned value will be serialized to JSON in place of this instance.
+     * @remarks {@link SerializationOptions.deserialize} must be able to reconstruct this instance from the returned value.
+     */
     readonly serialize: Serializer<T>;
 
+    /**
+     * Function which builds and returns an instance of {@link T} from the value returned from {@link SerializationOptions.serialize}.
+     * @remarks This should always return a new instance. Implement {@link SerializationOptions.deserializeInto} to reuse the existing instance.
+     */
     readonly deserialize: Deserializer<T>;
 
+    /**
+     * Optional function which deserialized the value returned from {@link SerializationOptions.serialize} into an existing instance of {@link T}.
+     * @remarks This must return a boolean representing whether the deserialization resulted in changes to the instance.
+     */
     readonly deserializeInto?: InPlaceDeserializer<T>;
 }
 
