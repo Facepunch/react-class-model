@@ -11,6 +11,8 @@
     "allowJs": true,
   },
   "exclude": [
+    "dist/",
+    "coverage/",
     "src/**/*.test.ts",
   ],
 }
