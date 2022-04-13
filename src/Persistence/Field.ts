@@ -25,7 +25,6 @@ export class Field {
         const persistence = getPersistence(this.ctor);
         if (!persistence) {
             throwPersistenceRequired(this.ctor);
-            return; // not reachable
         }
 
         if (current && persistence.deserializeInto) {
@@ -34,7 +33,7 @@ export class Field {
         }
 
         if (persistence.deserialize) {
-            return persistence.deserialize(props);
+            return [true, persistence.deserialize(props)];
         }
 
         const value = current ?? new this.ctor();

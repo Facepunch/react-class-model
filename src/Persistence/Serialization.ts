@@ -212,7 +212,7 @@ function equals(x: object, y: object) {
         }
 
         if (typeof y === 'number') {
-            return x.valueOf() === (y * 1000); // our number timestamps are in seconds, not ms
+            return x.valueOf() === (y * 1000); // assume numbers are unix timestamps (in seconds)
         }
     }
 

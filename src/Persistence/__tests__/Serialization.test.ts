@@ -1,3 +1,4 @@
+import { setupSerialization } from '..';
 import { requirePersistence } from '../Persistence';
 import { deserializeCopy, toSerializable } from '../Serialization';
 import { Line, NumberList, Player, Point, PointList, Team } from '../TestClasses';
@@ -33,6 +34,47 @@ describe('#toSerializable', () => {
 
         it('throws when trying to serialize a symbol', () => {
             expect(() => toSerializable(Symbol.for('foo'))).toThrow(/symbol/);
+        });
+    });
+
+    describe('objects', () => {
+        it('serializes to a matching object', () => {
+            const point = new Point(10, 20);
+            expect(toSerializable(point)).toStrictEqual({ x: 10, y: 20 });
+        });
+
+        it('does not include undefined fields', () => {
+            const point = new Point(10);
+            expect(point.y).toBeUndefined();
+            expect(toSerializable(point)).toStrictEqual({ x: 10 });
+        });
+
+        it('does not include fields without a @prop() decorator', () => {
+            const point = new Point(10, 20, 30);
+            expect(point.z).toBeDefined();
+            expect(toSerializable(point)).toStrictEqual({ x: 10, y: 20 });
+        });
+
+        it('correctly serializes array fields', () => {
+            const team = new Team();
+            team.members = [new Player(1, 'One'), new Player(2, 'Two')];
+            expect(toSerializable(team)).toStrictEqual({ members: [{ id: 1, name: 'One' }, { id: 2, name: 'Two' }] });
+        });
+    });
+
+    describe('serializer', () => {
+        it('uses the custom serializer function when defined', () => {
+            class Test {
+                constructor (public readonly value: number) {}
+            }
+
+            setupSerialization(Test, {
+                serialize: instance => instance.value,
+                deserialize: () => { throw new Error(); },
+            });
+
+            const instance = new Test(123);
+            expect(toSerializable(instance)).toBe(123);
         });
     });
 });
@@ -152,7 +194,7 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(pointListPersistence, pointList, { values });
             expect(changed).toBe(true);
             expect(pointList.values).not.toBe(values);
-            expect(pointList.values).toEqual(values);
+            expect(pointList.values).toStrictEqual(values);
         });
     
         it('updates objects in array fields', () => {
@@ -162,7 +204,7 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(pointListPersistence, pointList, { values });
             expect(changed).toBe(true);
             expect(pointList.values).not.toBe(values);
-            expect(pointList.values).toEqual(values);
+            expect(pointList.values).toStrictEqual(values);
         });
     });
 
@@ -177,9 +219,9 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
-            expect(team.members[0]).toEqual(player1);
-            expect(team.members[1]).toEqual(player2);
-            expect(team.members[2]).toEqual(player3);
+            expect(team.members[0]).toStrictEqual(player1);
+            expect(team.members[1]).toStrictEqual(player2);
+            expect(team.members[2]).toStrictEqual(player3);
         });
 
         it('updates objects in keyed array fields', () => {
@@ -196,9 +238,9 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
-            expect(team.members[0]).toEqual(player1);
-            expect(team.members[1]).toEqual(player2);
-            expect(team.members[2]).toEqual(player3);
+            expect(team.members[0]).toStrictEqual(player1);
+            expect(team.members[1]).toStrictEqual(player2);
+            expect(team.members[2]).toStrictEqual(player3);
         });
 
         it('removes old objects from keyed array fields', () => {
@@ -207,7 +249,7 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(teamPersistence, team, { members: [player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(1);
-            expect(team.members[0]).toEqual(player3);
+            expect(team.members[0]).toStrictEqual(player3);
         });
 
         it('reorders objects in keyed array fields', () => {
