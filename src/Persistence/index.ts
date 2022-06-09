@@ -1,4 +1,4 @@
-import { Constructor, AnyTyped, Serializer, Deserializer, InPlaceDeserializer } from './CommonTypes';
+import { Constructor, AnyTyped, Serializer, Deserializer, InPlaceDeserializer, PropConstructor } from './CommonTypes';
 import { requirePersistence, getPersistence } from './Persistence';
 import { Model } from '../Model';
 import { toSerializable, deserializeCopy } from './Serialization';
@@ -54,8 +54,9 @@ export function copyInto<TInstance extends Model & AnyTyped<TProps>, TProps>(val
 interface PropParams {
     /**
      * Specifies the expected type of this field. Required if the field is not a primitive type.
+     * If this is set to an object, the field will be interpreted as a {@link Map<string,T>}.
      */
-    readonly ctor?: Constructor<any>;
+    readonly ctor?: PropConstructor<any>;
 
     /**
      * Disables serialization of this field but allows deserialization.

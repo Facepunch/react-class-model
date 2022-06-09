@@ -1,7 +1,7 @@
 import { setupSerialization } from '..';
 import { requirePersistence } from '../Persistence';
 import { deserializeCopy, toSerializable } from '../Serialization';
-import { Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel } from '../TestClasses';
+import { Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel, Variable, VariableSet } from '../TestClasses';
 
 describe('#toSerializable', () => {
     describe('primitives', () => {
@@ -77,6 +77,24 @@ describe('#toSerializable', () => {
             expect(toSerializable(instance)).toBe(123);
         });
     });
+
+    describe('maps', () => {
+        it('serializes to a matching object', () => {
+            const set = new VariableSet();
+            const variable = new Variable();
+            variable.type = 'int';
+            variable.value = '10';
+            set.data.set('x', variable);
+            expect(toSerializable(set)).toStrictEqual({
+                data: {
+                    x: {
+                        type: 'int',
+                        value: '10',
+                    },
+                },
+            });
+        });
+    });
 });
 
 describe('#deserializeCopy', () => {
@@ -86,6 +104,7 @@ describe('#deserializeCopy', () => {
     const pointListPersistence = requirePersistence(PointList);
     const teamPersistence = requirePersistence(Team);
     const teamModelPersistence = requirePersistence(TeamModel);
+    const variableSetPersistence = requirePersistence(VariableSet);
 
     describe('primitives', () => {
         it('clears primitive fields to undefined', () => {
@@ -362,6 +381,54 @@ describe('#deserializeCopy', () => {
             expect(team.members[0]).toBe(player1);
             expect(team.members[1]).toBe(player2);
             expect(team.members[2]).toBe(player3);
+        });
+    });
+
+    describe('maps', () => {
+        it('initializes maps as needed', () => {
+            const set = new VariableSet();
+            set.data = null;
+            const changed = deserializeCopy(variableSetPersistence, set, { data: {} });
+            expect(changed).toBe(true);
+            expect(set.data).toBeInstanceOf(Map);
+        });
+
+        it('populates new values', () => {
+            const set = new VariableSet();
+            expect(set.data.size).toBe(0);
+            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '10' } } });
+            expect(changed).toBe(true);
+            expect(set.data.size).toBe(1);
+            expect(set.data.get('x')).toBeInstanceOf(Variable);
+            expect(set.data.get('x').value).toBe('10');
+        });
+
+        it('updates existing values', () => {
+            const set = new VariableSet();
+            const variable = new Variable();
+            variable.type = 'int';
+            variable.value = '10';
+            set.data.set('x', variable);
+            expect(set.data.size).toBe(1);
+            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '20' } } });
+            expect(changed).toBe(true);
+            expect(set.data.size).toBe(1);
+            expect(set.data.get('x')).toBeInstanceOf(Variable);
+            expect(set.data.get('x').value).toBe('20');
+        });
+
+        it('returns false when no changes occur', () => {
+            const set = new VariableSet();
+            const variable = new Variable();
+            variable.type = 'int';
+            variable.value = '10';
+            set.data.set('x', variable);
+            expect(set.data.size).toBe(1);
+            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '10' } } });
+            expect(changed).toBe(false);
+            expect(set.data.size).toBe(1);
+            expect(set.data.get('x')).toBeInstanceOf(Variable);
+            expect(set.data.get('x').value).toBe('10');
         });
     });
 });

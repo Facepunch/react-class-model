@@ -35,6 +35,10 @@ export function toSerializable<T>(instance: T) {
 
         if (Array.isArray(value)) {
             value = value.map(toSerializable);
+        } else if (value instanceof Map) {
+            const mapEntries = [...value.entries()];
+            const transformedEntries = mapEntries.map(([key, value]) => [`${key}`, toSerializable(value)]);
+            value = Object.fromEntries(transformedEntries);
         } else {
             value = toSerializable(value);
         }
@@ -88,6 +92,29 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
                 } else {
                     field.set(current, newProp);
                     changed = true;
+                }
+            } else if (field.ctor !== undefined && typeof field.ctor === 'object') {
+                let map: Map<string, any>;
+                if (currentProp instanceof Map) {
+                    map = currentProp;
+                } else {
+                    map = new Map();
+                    field.set(current, map);
+                    changed = true;
+                }
+
+                for (const [key, value] of Object.entries(newProp)) {
+                    if (map.has(key)) {
+                        const [fieldChanged, newValue] = field.deserialize(value, map.get(key));
+                        if (fieldChanged) {
+                            map.set(key, newValue);
+                            changed = true;
+                        }
+                    } else {
+                        const [_, newValue] = field.deserialize(value, undefined);
+                        map.set(key, newValue);
+                        changed = true;
+                    }
                 }
             } else {
                 if (!objPersistence) {

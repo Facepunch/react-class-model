@@ -71,3 +71,16 @@ export class TeamModel extends Model {
     @prop({ ctor: PlayerModel }) @watch
     public members: Player[];
 }
+
+export class Variable extends Model {
+    @prop() @watch
+    public type: string;
+
+    @prop() @watch
+    public value: string;
+}
+
+export class VariableSet extends Model {
+    @prop({ ctor: { value: Variable } }) @watch
+    public data: Map<string, Variable> = new Map();
+}

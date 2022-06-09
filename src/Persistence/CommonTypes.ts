@@ -1,4 +1,5 @@
 export type Constructor<T> = new (...args: any[]) => T;
+export type PropConstructor<T> = Constructor<T> | { value?: Constructor<T> };
 export type Getter<T> = (instance: T) => any;
 export type Setter<T> = (instance: T, value: any) => void;
 export type DeserializeResult<T = any> = [boolean, T];
