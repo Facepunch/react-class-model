@@ -10,7 +10,10 @@ import {
 
 type Listener = (version: number) => void;
 type UseModelFn<T extends Model> = (trackChanges?: boolean) => T;
-type WatchModelFn<T extends Model> = (model: T) => T;
+type WatchModelFn<T extends Model> = {
+    (model: T): T;
+    (model: T[]): T[];
+};
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
     UseModelFn<T>,
@@ -119,7 +122,7 @@ export function defineModel<T extends Model>(): DefineResult<T> {
     return [
         context.Provider,
         (trackChanges: boolean = true) => useModel<T>(context, trackChanges),
-        (model: T) => watchModel<T>(model),
+        watchModel,
         context
     ];
 }
@@ -137,15 +140,23 @@ function useModel<T extends Model>(context: Context<T>, trackChanges: boolean) {
     return value;
 }
 
-function watchModel<T extends Model>(value: T) {
+function watchModel<T extends Model>(value: T | T[]) {
+    const models = Array.isArray(value) ? value : [value];
+
     const [, setState] = useState(0);
 
     useEffect(() => {
-        if (value) {
-            value.addListener(setState);
-            return () => value.removeListener(setState);
+        const validModels = models.filter(m => m instanceof Model);
+        for (const model of validModels) {
+            model.addListener(setState);
         }
-    }, [ value ]);
+
+        return () => {
+            for (const model of validModels) {
+                model.removeListener(setState);
+            }
+        }
+    }, models);
 
     return value;
 }
