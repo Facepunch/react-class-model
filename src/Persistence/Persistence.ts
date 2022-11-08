@@ -29,16 +29,15 @@ export function requirePersistence(value: any) {
 
     let persistence = getPersistence(value);
     if (!persistence) {
-        throwPersistenceRequired(value);
-        return;
+        throw persistenceRequiredError(value);
     }
 
     return persistence;
 }
 
-export function throwPersistenceRequired(value: any) {
+export function persistenceRequiredError(value: any): Error {
     const name = value.name || value.constructor.name;
-    throw new Error(`Type '${name}' has no persistence defined. Use the @prop decorator to set it up.`);
+    return new Error(`Type '${name}' has no persistence defined. Use the @prop decorator to set it up.`);
 }
 
 export function getPersistence(obj: any, create: boolean = false) {

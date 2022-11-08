@@ -1,5 +1,5 @@
 import { DeserializeResult, Getter, PropConstructor, Setter } from './CommonTypes';
-import { getPersistence, throwPersistenceRequired } from './Persistence';
+import { getPersistence, persistenceRequiredError } from './Persistence';
 import { deserializeCopy } from './Serialization';
 
 export class Field {
@@ -27,7 +27,7 @@ export class Field {
 
         const persistence = getPersistence(ctor);
         if (!persistence) {
-            throwPersistenceRequired(ctor);
+            throw persistenceRequiredError(ctor);
         }
 
         if (current && persistence.deserializeInto) {
