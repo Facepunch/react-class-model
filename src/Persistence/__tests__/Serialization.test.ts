@@ -361,15 +361,60 @@ describe('#deserializeCopy', () => {
             expect(team.members[2]).toBe(player2);
         });
 
-        it('reorders and updates objects in keyed array fields', () => {
+        it('reorders and updates objects in keyed array fields 1', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1' }, { id: 2, name: '2' }] });
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 2, name: '2' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
-            expect(team.members[1]).toMatchObject({ id: 1, name: '1' });
+            expect(team.members[1]).toMatchObject({ id: 1, name: '1!' });
             expect(team.members[2]).toMatchObject({ id: 2, name: '2' });
+        });
+
+        it('reorders and updates objects in keyed array fields 2', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 2, name: '2' }, { id: 1, name: '1!' }] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
+            expect(team.members[1]).toMatchObject({ id: 2, name: '2' });
+            expect(team.members[2]).toMatchObject({ id: 1, name: '1!' });
+        });
+
+        it('reorders and updates objects in keyed array fields 3', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 2, name: '2' }] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toMatchObject({ id: 1, name: '1!' });
+            expect(team.members[1]).toMatchObject({ id: 3, name: '3' });
+            expect(team.members[2]).toMatchObject({ id: 2, name: '2' });
+        });
+
+        it('adds, reorders, and updates objects in keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 4, name: '4' }, { id: 2, name: '2' }] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(4);
+            expect(team.members[0]).toMatchObject({ id: 1, name: '1!' });
+            expect(team.members[1]).toMatchObject({ id: 3, name: '3' });
+            expect(team.members[2]).toMatchObject({ id: 4, name: '4' });
+            expect(team.members[3]).toMatchObject({ id: 2, name: '2' });
+        });
+
+        it('adds, removes, reorders, and updates objects in keyed array fields', () => {
+            const team = new TeamModel();
+            team.members = [player1, player2, player3];
+            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 4, name: '4' }] });
+            expect(changed).toBe(true);
+            expect(team.members).toHaveLength(3);
+            expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
+            expect(team.members[1]).toMatchObject({ id: 1, name: '1!' });
+            expect(team.members[2]).toMatchObject({ id: 4, name: '4' });
         });
 
         it('returns false if objects in keyed array field are unchanged', () => {
@@ -387,7 +432,7 @@ describe('#deserializeCopy', () => {
     describe('maps', () => {
         it('initializes maps as needed', () => {
             const set = new VariableSet();
-            set.data = null;
+            set.data = null as unknown as Map<string, Variable>;
             const changed = deserializeCopy(variableSetPersistence, set, { data: {} });
             expect(changed).toBe(true);
             expect(set.data).toBeInstanceOf(Map);
@@ -400,7 +445,7 @@ describe('#deserializeCopy', () => {
             expect(changed).toBe(true);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);
-            expect(set.data.get('x').value).toBe('10');
+            expect(set.data.get('x')?.value).toBe('10');
         });
 
         it('updates existing values', () => {
@@ -414,7 +459,7 @@ describe('#deserializeCopy', () => {
             expect(changed).toBe(true);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);
-            expect(set.data.get('x').value).toBe('20');
+            expect(set.data.get('x')?.value).toBe('20');
         });
 
         it('returns false when no changes occur', () => {
@@ -428,7 +473,7 @@ describe('#deserializeCopy', () => {
             expect(changed).toBe(false);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);
-            expect(set.data.get('x').value).toBe('10');
+            expect(set.data.get('x')?.value).toBe('10');
         });
     });
 });
