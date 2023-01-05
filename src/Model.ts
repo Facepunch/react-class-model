@@ -7,12 +7,19 @@ import {
     ProviderProps,
     useEffect
 } from 'react';
+import { Constructor } from './Persistence/CommonTypes';
 
 type Listener = (version: number) => void;
 type UseModelFn<T extends Model> = (trackChanges?: boolean) => T;
 type WatchModelFn<T extends Model> = {
     (model: T): T;
-    (model: T[]): T[];
+    (model: T | null): T | null;
+    (model: T | undefined): T | undefined;
+    (model: T | null | undefined): T | null | undefined;
+    (models: T[]): T[];
+    (models: (T | null)[]): (T | null)[];
+    (models: (T | undefined)[]): (T | undefined)[];
+    (models: (T | null | undefined)[]): (T | null | undefined)[];
 };
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
@@ -22,8 +29,8 @@ type DefineResult<T extends Model> = [
 ];
 
 /**
- * Base class for your models. Derive from this and call {@link notifyListeners()} when you change data to notify consumers.
- * @see The {@link watch()} field decorator automatically calls {@link notifyListeners()} when the field it is applied to are updated.
+ * Base class for your models. Derive from this and call {@link Model.notifyListeners()} when you change data to notify consumers.
+ * @see The {@link watch()} field decorator automatically calls {@link Model.notifyListeners()} when the field it is applied to are updated.
  */
 export abstract class Model {
     private version: number = 1;
@@ -116,9 +123,10 @@ export function watch<T extends Model>(target: T, propertyKey: string | symbol, 
  * Define a Model type, assigns it a React Context archetype, and builds hooks to interact with it.
  * @returns The context provider component, a hook to get the model instance from a provider, and a hook to watch for changes on an instance of the model.
  */
-export function defineModel<T extends Model>(): DefineResult<T> {
-    const context = createContext<T>(null);
-    
+export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResult<T> {
+    const context = createContext<T>(null as unknown as T);
+    context.displayName = ctor?.name;
+
     return [
         context.Provider,
         (trackChanges: boolean = true) => useModel<T>(context, trackChanges),
@@ -130,7 +138,7 @@ export function defineModel<T extends Model>(): DefineResult<T> {
 function useModel<T extends Model>(context: Context<T>, trackChanges: boolean) {
     const value = useContext<T>(context);
     if (!value) {
-        return null;
+        throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
     }
 
     if (trackChanges) {
@@ -140,7 +148,7 @@ function useModel<T extends Model>(context: Context<T>, trackChanges: boolean) {
     return value;
 }
 
-function watchModel<T extends Model>(value: T | T[]) {
+function watchModel<T extends Model | null | undefined>(value: T | T[]) {
     const models = Array.isArray(value) ? value : [value];
 
     const [, setState] = useState(0);
@@ -148,12 +156,12 @@ function watchModel<T extends Model>(value: T | T[]) {
     useEffect(() => {
         const validModels = models.filter(m => m instanceof Model);
         for (const model of validModels) {
-            model.addListener(setState);
+            model?.addListener(setState);
         }
 
         return () => {
             for (const model of validModels) {
-                model.removeListener(setState);
+                model?.removeListener(setState);
             }
         }
     }, models);
@@ -175,7 +183,7 @@ function enqueue(task: () => void) {
 function flushTasks() {
     while (taskQueue.length > 0) {
         const task = taskQueue.pop();
-        task();
+        task?.();
     }
 }
 

@@ -3,12 +3,12 @@ import { Model, watch } from '../Model';
 
 export class Point {
     @prop()
-    public x: number;
+    public x: number | undefined;
 
     @prop()
-    public y: number;
+    public y: number | undefined;
 
-    public z: number;
+    public z: number | undefined;
 
     constructor(x?: number, y?: number, z?: number) {
         this.x = x;
@@ -37,10 +37,10 @@ export class PointList {
 
 export class Player {
     @prop() @key
-    public id: number;
+    public id: number | undefined;
 
     @prop()
-    public name: string;
+    public name: string | undefined;
 
     constructor(id?: number, name?: string) {
         this.id = id;
@@ -55,10 +55,10 @@ export class Team {
 
 export class PlayerModel extends Model {
     @prop() @watch @key
-    public id: number;
+    public id: number | undefined;
 
     @prop() @watch
-    public name: string;
+    public name: string | undefined;
 
     constructor(id?: number, name?: string) {
         super();

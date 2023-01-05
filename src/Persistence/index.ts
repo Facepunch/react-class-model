@@ -46,7 +46,7 @@ export function deserializeInto<T extends Model>(value: T, json: string) {
  * @param props The JavaScript object to deserialize from.
  * @remarks This performs deserialization logic according to {@link prop()} decorators on the model type.
  */
-export function copyInto<TInstance extends Model & AnyTyped<TProps>, TProps>(value: TInstance, props: TProps) {
+export function copyInto<TInstance extends Model & AnyTyped<TProps>, TProps extends Object>(value: TInstance, props: TProps) {
     const persistence = requirePersistence(value);
     return deserializeCopy(persistence, value, props);
 }
@@ -79,17 +79,12 @@ interface PropParams {
  * @param props Parameters on how to handle serialization of this field.
  */
 export function prop(props?: PropParams) {
-    const ctor = props && props.ctor;
-    const transient = props && props.transient;
-    const key = props && props.key;
-    const copy = props && props.copy;
-    
     return <T>(target: T, propertyName: string, ...a: any[]) => {
-        const field = new Field(ctor, transient, copy,
+        const field = new Field(props?.ctor, props?.transient ?? false, props?.copy ?? false,
             instance => instance[propertyName],
             (instance, value) => instance[propertyName] = value);
 
-        getPersistence(target, true).add(key || propertyName, field);
+        requirePersistence(target, true).add(props?.key || propertyName, field);
     };
 }
 
@@ -99,7 +94,7 @@ export function prop(props?: PropParams) {
  * Multiple fields may be marked as keys to form a composite key.
  */
 export function key<T>(target: T, propertyKey: string, prevDesc?: any): any {
-    const persistence = getPersistence(target, true);
+    const persistence = requirePersistence(target, true);
     persistence.keys.push(propertyKey);
 }
 
@@ -131,7 +126,7 @@ interface SerializationOptions<T> {
  * @remarks Model serialization is handled automatically using the {@link prop()} decorator so you should not call this for models.
  */
 export function setupSerialization<T>(ctor: Constructor<T>, options: SerializationOptions<T>) {
-    const persistence = getPersistence(ctor, true);
+    const persistence = requirePersistence(ctor, true);
 
     if (persistence.fields.size > 0) {
         throw new Error('The provided type has fields defined - you should not call setupPersistence for model types.');
@@ -139,5 +134,5 @@ export function setupSerialization<T>(ctor: Constructor<T>, options: Serializati
         
     persistence.serialize = options.serialize;
     persistence.deserialize = options.deserialize;
-    persistence.deserializeInto = options.deserializeInto;
+    persistence.deserializeInto = options.deserializeInto ?? null;
 }

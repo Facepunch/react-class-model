@@ -22,12 +22,12 @@ export class Persistence {
     }
 }
 
-export function requirePersistence(value: any) {
+export function requirePersistence(value: any, create: boolean = false) {
     if (!value) {
         throw new Error('Cannot serialize null/falsy value');
     }
 
-    let persistence = getPersistence(value);
+    let persistence = getPersistence(value, create);
     if (!persistence) {
         throw persistenceRequiredError(value);
     }

@@ -211,7 +211,7 @@ function keysMatch(persistence: Persistence, obj: object, props: any) {
         for (let i = 0; i < persistence.keys.length; i++) {
             const key = persistence.keys[i];
             const field = persistence.fields.get(key);
-            if (!equals(field.get(obj), props[key])) {
+            if (!field || !equals(field.get(obj), props[key])) {
                 return false;
             }
         }
@@ -219,7 +219,7 @@ function keysMatch(persistence: Persistence, obj: object, props: any) {
         return true;
     } else {
         const field = persistence.fields.get(persistence.keys[0]);
-        return equals(field.get(obj), props);
+        return field && equals(field.get(obj), props);
     }
 }
 
