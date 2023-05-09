@@ -188,7 +188,7 @@ function flushTasks() {
 }
 
 function getScheduler(): (fn: () => any) => void {
-    if (typeof window['setImmediate'] === 'function') {
+    if (typeof window === 'object' && typeof window['setImmediate'] === 'function') {
         return window['setImmediate'];
     }
 
