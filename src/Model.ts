@@ -5,21 +5,23 @@ import {
     useState,
     ProviderExoticComponent,
     ProviderProps,
-    useEffect
+    useEffect,
+    useMemo
 } from 'react';
 import { Constructor } from './Persistence/CommonTypes';
 
-type Listener = (version: number) => void;
+type ListenerCallback = (version: number) => void;
+type Listener = [ListenerCallback, Set<string> | null];
 type UseModelFn<T extends Model> = (trackChanges?: boolean) => T;
 type WatchModelFn<T extends Model> = {
     (model: T): T;
     (model: T | null): T | null;
     (model: T | undefined): T | undefined;
     (model: T | null | undefined): T | null | undefined;
-    (models: T[]): T[];
-    (models: (T | null)[]): (T | null)[];
-    (models: (T | undefined)[]): (T | undefined)[];
-    (models: (T | null | undefined)[]): (T | null | undefined)[];
+    (...models: T[]): T[];
+    (...models: (T | null)[]): (T | null)[];
+    (...models: (T | undefined)[]): (T | undefined)[];
+    (...models: (T | null | undefined)[]): (T | null | undefined)[];
 };
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
@@ -35,52 +37,83 @@ type DefineResult<T extends Model> = [
 export abstract class Model {
     private version: number = 1;
     private listeners: Listener[] = [];
-    private dirty: boolean = false;
+    private dirtyProps: Set<string> = new Set();
     private props: Map<string | symbol, any> = new Map();
 
     public get hasListeners() {
         return this.listeners.length > 0;
     }
 
-    public notifyListeners() {
-        if (this.dirty) {
+    public notifyListeners(...propNames: string[]) {
+        if (Array.isArray(propNames) && propNames.length > 0) {
+            if (!propNames.some(p => addToSet(this.dirtyProps, p))) {
+                return;
+            }
+        } else if (!addToSet(this.dirtyProps, '*')) {
             return;
         }
-
-        this.dirty = true;
+        
         this.version++;
         if (this.version > 100000) {
             this.version = 1;
         }
         
         enqueue(() => {
-            this.dirty = false;
-
             for (let i = 0; i < this.listeners.length; i++) {
+                const [callback, props] = this.listeners[i];
+                const isRelevant = props instanceof Set
+                    ? this.dirtyProps.has('*') || hasOverlap(this.dirtyProps, props)
+                    : true;
+
+                if (!isRelevant) {
+                    continue;
+                }
+
                 try {
-                    this.listeners[i](this.version);
+                    callback(this.version);
                 } catch (e) {
                     this.handleError(e);
                 }
             }
+
+            this.dirtyProps.clear();
         });
     }
 
-    public addListener(listener: Listener) {
-        this.listeners.push(listener);
+    public addListener(listener: ListenerCallback, props?: Set<string>) {
+        this.listeners.push([listener, props ?? null]);
 
         if (this.listeners.length > 100) {
             this.handleError(new Error(`Too many listeners on ${this.constructor.name}`));
         }
     }
 
-    public removeListener(listener: Listener) {
-        this.listeners = this.listeners.filter(i => i !== listener);
+    public removeListener(listener: ListenerCallback) {
+        this.listeners = this.listeners.filter(t => t[0] !== listener);
     }
 
     protected handleError(e: any) {
         console.error(e);
     }
+}
+
+function addToSet<T>(set: Set<T>, value: T): boolean {
+    if (set.has(value)) {
+        return false;
+    } else {
+        set.add(value);
+        return true;
+    }
+}
+
+function hasOverlap<T>(setA: Set<T>, setB: Set<T>): boolean {
+    for (const v of setA) {
+        if (setB.has(v)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -107,7 +140,7 @@ export function watch<T extends Model>(target: T, propertyKey: string | symbol, 
             const value = getValue(this);
             if (newValue !== value) {
                 this.props.set(propertyKey, newValue);
-                this.notifyListeners();
+                this.notifyListeners(propertyKey);
             }
         },
 
@@ -135,38 +168,64 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
     ];
 }
 
-function useModel<T extends Model>(context: Context<T>, trackChanges: boolean) {
+function useModel<T extends Model>(context: Context<T>, trackChanges: boolean): T {
     const value = useContext<T>(context);
     if (!value) {
         throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
     }
 
     if (trackChanges) {
-        watchModel(value);
+        return watchModel(value);
+    } else {
+        return value;
     }
-
-    return value;
 }
 
-function watchModel<T extends Model | null | undefined>(value: T | T[]) {
-    const models = Array.isArray(value) ? value : [value];
-
+function watchModel<T extends Model | null | undefined>(moddel: T) : T;
+function watchModel<T extends Model | null | undefined>(...models: T[]): T | T[] {   
     const [, setState] = useState(0);
+    const modelListeners = useMemo(() => models.map(createListener), models)
 
     useEffect(() => {
-        const validModels = models.filter(m => m instanceof Model);
-        for (const model of validModels) {
-            model?.addListener(setState);
+        const validModels = modelListeners.filter(t => t[0] instanceof Model);
+        for (const [model, , props] of validModels) {
+            model?.addListener(setState, props);
         }
 
         return () => {
-            for (const model of validModels) {
+            for (const [model] of validModels) {
                 model?.removeListener(setState);
             }
         }
-    }, models);
+    }, modelListeners);
 
-    return value;
+    // reset the touched props because the component should be re-rendering now and will touch them again
+    for (const [, , props] of modelListeners) {
+        props.clear();
+    }
+
+    return models.length === 1
+        ? modelListeners[0][1]
+        : modelListeners.map(t => t[1]);
+}
+
+function createListener<T extends Model | null | undefined>(model: T): [T, T, Set<string>] {
+    const props = new Set<string>();
+    const handler: ProxyHandler<T & Model> = {
+        get(target, prop) {
+            if (typeof prop === 'string') {
+                props.add(prop);
+            }
+            
+            return target[prop];
+        }
+    };
+
+    const proxy = model instanceof Model
+        ? new Proxy(model, handler)
+        : model;
+
+    return [model, proxy, props];
 }
 
 const scheduler = getScheduler();
