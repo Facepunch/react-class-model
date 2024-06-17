@@ -1,6 +1,10 @@
 import { key, prop } from '.';
 import { Model, watch } from '../Model';
 
+export function expectModelToStrictEqual<T extends Model>(actual: T, expected: T) {
+    expect(actual['props']).toStrictEqual(expected['props']);
+}
+
 export class Point {
     @prop()
     public x: number | undefined;
@@ -69,7 +73,7 @@ export class PlayerModel extends Model {
 
 export class TeamModel extends Model {
     @prop({ ctor: PlayerModel }) @watch
-    public members: Player[];
+    public members: PlayerModel[];
 }
 
 export class Variable extends Model {

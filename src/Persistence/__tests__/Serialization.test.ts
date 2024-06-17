@@ -1,7 +1,7 @@
 import { setupSerialization } from '..';
 import { requirePersistence } from '../Persistence';
 import { deserializeCopy, toSerializable } from '../Serialization';
-import { Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel, Variable, VariableSet } from '../TestClasses';
+import { expectModelToStrictEqual, Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel, Variable, VariableSet } from '../TestClasses';
 
 describe('#toSerializable', () => {
     describe('primitives', () => {
@@ -317,9 +317,9 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
-            expect(team.members[0]).toStrictEqual(player1);
-            expect(team.members[1]).toStrictEqual(player2);
-            expect(team.members[2]).toStrictEqual(player3);
+            expectModelToStrictEqual(team.members[0], player1);
+            expectModelToStrictEqual(team.members[1], player2);
+            expectModelToStrictEqual(team.members[2], player3);
         });
 
         it('updates objects in keyed array fields', () => {
@@ -336,9 +336,9 @@ describe('#deserializeCopy', () => {
             const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
-            expect(team.members[0]).toStrictEqual(player1);
-            expect(team.members[1]).toStrictEqual(player2);
-            expect(team.members[2]).toStrictEqual(player3);
+            expectModelToStrictEqual(team.members[0], player1);
+            expectModelToStrictEqual(team.members[1], player2);
+            expectModelToStrictEqual(team.members[2], player3);
         });
 
         it('removes old objects from keyed array fields', () => {
