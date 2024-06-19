@@ -10,18 +10,23 @@ import {
 } from 'react';
 import { Constructor } from './Persistence/CommonTypes';
 
+const proxiedValue = 'proxiedValue';
 type ListenerCallback = (version: number) => void;
 type Listener = [ListenerCallback, Set<string> | null];
-type UseModelFn<T extends Model> = (trackChanges?: boolean) => T;
+type ProxiedValue<T extends Model | null | undefined> = T extends Model ? T & { [proxiedValue]: T } : T;
+type UseModelFn<T extends Model> = {
+    (trackChanges?: true): ProxiedValue<T>;
+    (trackChanges: false): T;
+};
 type WatchModelFn<T extends Model> = {
-    (model: T): T;
-    (model: T | null): T | null;
-    (model: T | undefined): T | undefined;
-    (model: T | null | undefined): T | null | undefined;
-    (...models: T[]): T[];
-    (...models: (T | null)[]): (T | null)[];
-    (...models: (T | undefined)[]): (T | undefined)[];
-    (...models: (T | null | undefined)[]): (T | null | undefined)[];
+    (model: T): ProxiedValue<T>;
+    (model: T | null): ProxiedValue<T> | null;
+    (model: T | undefined): ProxiedValue<T> | undefined;
+    (model: T | null | undefined): ProxiedValue<T> | null | undefined;
+    (...models: T[]): ProxiedValue<T>[];
+    (...models: (T | null)[]): (ProxiedValue<T> | null)[];
+    (...models: (T | undefined)[]): (ProxiedValue<T> | undefined)[];
+    (...models: (T | null | undefined)[]): (ProxiedValue<T> | null | undefined)[];
 };
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
@@ -160,29 +165,32 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
     const context = createContext<T>(null as unknown as T);
     context.displayName = ctor?.name;
 
+    function useModel(trackChanges: true): ProxiedValue<T>;
+    function useModel(trackChanges: false): T;
+    function useModel(trackChanges: boolean = true) {
+        const value = useContext<T>(context);
+        if (!value) {
+            throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
+        }
+    
+        if (trackChanges) {
+            return watchModel(value);
+        } else {
+            return value;
+        }
+    }
+
     return [
         context.Provider,
-        (trackChanges: boolean = true) => useModel<T>(context, trackChanges),
+        useModel,
         watchModel,
         context
     ];
 }
 
-function useModel<T extends Model>(context: Context<T>, trackChanges: boolean): T {
-    const value = useContext<T>(context);
-    if (!value) {
-        throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
-    }
 
-    if (trackChanges) {
-        return watchModel(value);
-    } else {
-        return value;
-    }
-}
-
-function watchModel<T extends Model | null | undefined>(moddel: T) : T;
-function watchModel<T extends Model | null | undefined>(...models: T[]): T | T[] {   
+function watchModel<T extends Model | null | undefined>(moddel: T) : ProxiedValue<T>;
+function watchModel<T extends Model | null | undefined>(...models: T[]): ProxiedValue<T> | ProxiedValue<T>[] {   
     const [, setState] = useState(0);
     const modelListeners = useMemo(() => models.map(createListener), models)
 
@@ -209,11 +217,15 @@ function watchModel<T extends Model | null | undefined>(...models: T[]): T | T[]
         : modelListeners.map(t => t[1]);
 }
 
-function createListener<T extends Model | null | undefined>(model: T): [T, T, Set<string>] {
+function createListener<T extends Model | null | undefined>(model: T): [T, ProxiedValue<T>, Set<string>] {
     const props = new Set<string>();
     const handler: ProxyHandler<T & Model> = {
         get(target, prop) {
             if (typeof prop === 'string') {
+                if (prop === proxiedValue) {
+                    return model;
+                }
+
                 props.add(prop);
             }
             
@@ -225,7 +237,7 @@ function createListener<T extends Model | null | undefined>(model: T): [T, T, Se
         ? new Proxy(model, handler)
         : model;
 
-    return [model, proxy, props];
+    return [model, proxy as ProxiedValue<T>, props];
 }
 
 const scheduler = getScheduler();
