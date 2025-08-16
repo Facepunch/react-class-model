@@ -17,7 +17,7 @@ export function toSerializable<T>(instance: T) {
         throw new Error(`Cannot serialize ${typeof instance}`);
     }
 
-    const persistence = requirePersistence(instance);
+    const persistence = requirePersistence(instance.constructor);
     if (persistence.serialize) {
         return persistence.serialize(instance);
     }
@@ -67,33 +67,7 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
         }
 
         if (typeof newProp === 'object' && newProp !== null) {
-            const objPersistence = getPersistence(field.ctor, false);
-
-            if (Array.isArray(newProp)) {
-                if (objPersistence && objPersistence.keys.length > 0) {
-                    if (!Array.isArray(currentProp)) {
-                        currentProp = [];
-                        field.set(current, currentProp);
-                    }
-
-                    if (mergeArray(objPersistence, field, currentProp, newProp)) {
-                        changed = true;
-                    }
-                } else if (objPersistence) {
-                    currentProp = newProp.map((item, index) => {
-                        const [updated, newValue] = field.deserialize(item, currentProp?.[index]);
-                        changed = changed || updated;
-                        return newValue;
-                    });
-
-                    if (changed) {
-                        field.set(current, currentProp);
-                    }
-                } else {
-                    field.set(current, newProp);
-                    changed = true;
-                }
-            } else if (field.ctor !== undefined && typeof field.ctor === 'object') {
+            if (field.ctor !== undefined && typeof field.ctor === 'object') {
                 let map: Map<string, any>;
                 if (currentProp instanceof Map) {
                     map = currentProp;
@@ -117,15 +91,42 @@ export function deserializeCopy<T>(persistence: Persistence, current: T, props: 
                     }
                 }
             } else {
-                if (!objPersistence) {
-                    console.error(`Constructor is required for @prop('${name}')`);
-                    continue;
-                }
+                const objPersistence = getPersistence(field.ctor, false);
+                if (Array.isArray(newProp)) {
+                    if (objPersistence && objPersistence.keys.length > 0) {
+                        if (!Array.isArray(currentProp)) {
+                            currentProp = [];
+                            field.set(current, currentProp);
+                        }
 
-                const [updated, newValue] = field.deserialize(newProp, currentProp);
-                if (updated) {
-                    field.set(current, newValue);
-                    changed = true;
+                        if (mergeArray(objPersistence, field, currentProp, newProp)) {
+                            changed = true;
+                        }
+                    } else if (objPersistence) {
+                        currentProp = newProp.map((item, index) => {
+                            const [updated, newValue] = field.deserialize(item, currentProp?.[index]);
+                            changed = changed || updated;
+                            return newValue;
+                        });
+
+                        if (changed) {
+                            field.set(current, currentProp);
+                        }
+                    } else {
+                        field.set(current, newProp);
+                        changed = true;
+                    }
+                } else {
+                    if (!objPersistence) {
+                        console.error(`Constructor is required for @prop('${name.toString()}')`);
+                        continue;
+                    }
+
+                    const [updated, newValue] = field.deserialize(newProp, currentProp);
+                    if (updated) {
+                        field.set(current, newValue);
+                        changed = true;
+                    }
                 }
             }
         } else {
@@ -247,7 +248,7 @@ function equals(x: object, y: object) {
 }
 
 const hasOwnProperty = Object.prototype.hasOwnProperty;
-function hasProperty(value: object, name: string): boolean {
+function hasProperty(value: object, name: string | symbol): boolean {
     if (typeof value !== 'object' || Array.isArray(value) || value == null) {
         return false; // not an object
     }

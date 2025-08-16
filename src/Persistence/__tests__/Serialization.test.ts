@@ -98,18 +98,10 @@ describe('#toSerializable', () => {
 });
 
 describe('#deserializeCopy', () => {
-    const pointPersistence = requirePersistence(Point);
-    const linePersistence = requirePersistence(Line);
-    const numberListPersistence = requirePersistence(NumberList);
-    const pointListPersistence = requirePersistence(PointList);
-    const teamPersistence = requirePersistence(Team);
-    const teamModelPersistence = requirePersistence(TeamModel);
-    const variableSetPersistence = requirePersistence(VariableSet);
-
     describe('primitives', () => {
         it('clears primitive fields to undefined', () => {
             const point = new Point(10);
-            const changed = deserializeCopy(pointPersistence, point, { x: undefined });
+            const changed = deserializeCopy(requirePersistence(Point), point, { x: undefined });
             expect(changed).toBe(true);
             expect(point.x).toBeUndefined();
             expect(point.y).toBeUndefined();
@@ -117,7 +109,7 @@ describe('#deserializeCopy', () => {
 
         it('clears primitive fields to null', () => {
             const point = new Point(10);
-            const changed = deserializeCopy(pointPersistence, point, { x: null });
+            const changed = deserializeCopy(requirePersistence(Point), point, { x: null });
             expect(changed).toBe(true);
             expect(point.x).toBeNull();
             expect(point.y).toBeUndefined();
@@ -125,7 +117,7 @@ describe('#deserializeCopy', () => {
 
         it('does not clear primitive fields when missing', () => {
             const point = new Point(10);
-            const changed = deserializeCopy(pointPersistence, point, {});
+            const changed = deserializeCopy(requirePersistence(Point), point, {});
             expect(changed).toBe(false);
             expect(point.x).toBe(10);
             expect(point.y).toBeUndefined();
@@ -134,7 +126,7 @@ describe('#deserializeCopy', () => {
         it('sets primitive fields', () => {
             const point = new Point();
             expect(point.x).toBeUndefined();
-            const changed = deserializeCopy(pointPersistence, point, { x: 1 });
+            const changed = deserializeCopy(requirePersistence(Point), point, { x: 1 });
             expect(changed).toBe(true);
             expect(point.x).toBe(1);
             expect(point.y).toBeUndefined();
@@ -142,7 +134,7 @@ describe('#deserializeCopy', () => {
 
         it('returns false if primitive fields are unchanged', () => {
             const point = new Point(1);
-            const changed = deserializeCopy(pointPersistence, point, { x: 1 });
+            const changed = deserializeCopy(requirePersistence(Point), point, { x: 1 });
             expect(changed).toBe(false);
             expect(point.x).toBe(1);
             expect(point.y).toBeUndefined();
@@ -154,7 +146,7 @@ describe('#deserializeCopy', () => {
             const line = new Line();
             line.start = new Point();
             expect(line.start).toBeDefined();
-            const changed = deserializeCopy(linePersistence, line, { start: undefined });
+            const changed = deserializeCopy(requirePersistence(Line), line, { start: undefined });
             expect(changed).toBe(true);
             expect(line.start).toBeUndefined();
         });
@@ -163,7 +155,7 @@ describe('#deserializeCopy', () => {
             const line = new Line();
             line.start = new Point();
             expect(line.start).toBeDefined();
-            const changed = deserializeCopy(linePersistence, line, { start: null });
+            const changed = deserializeCopy(requirePersistence(Line), line, { start: null });
             expect(changed).toBe(true);
             expect(line.start).toBeNull();
         });
@@ -171,7 +163,7 @@ describe('#deserializeCopy', () => {
         it('populates object fields', () => {
             const line = new Line();
             expect(line.start).toBeUndefined();
-            const changed = deserializeCopy(linePersistence, line, { start: { x: 1 } });
+            const changed = deserializeCopy(requirePersistence(Line), line, { start: { x: 1 } });
             expect(changed).toBe(true);
             expect(line.start).toBeDefined();
             expect(line.start).toBeInstanceOf(Point);
@@ -183,7 +175,7 @@ describe('#deserializeCopy', () => {
             const line = new Line();
             line.start = new Point();
             expect(line.start.x).toBeUndefined();
-            const changed = deserializeCopy(linePersistence, line, { start: { x: 1 } });
+            const changed = deserializeCopy(requirePersistence(Line), line, { start: { x: 1 } });
             expect(changed).toBe(true);
             expect(line.start.x).toBe(1);
         });
@@ -191,7 +183,7 @@ describe('#deserializeCopy', () => {
         it('returns false if object fields are unchanged', () => {
             const line = new Line();
             line.start = new Point(1);
-            const changed = deserializeCopy(linePersistence, line, { start: { x: 1 } });
+            const changed = deserializeCopy(requirePersistence(Line), line, { start: { x: 1 } });
             expect(changed).toBe(false);
             expect(line.start.x).toBe(1);
         });
@@ -202,7 +194,7 @@ describe('#deserializeCopy', () => {
             const numberList = new NumberList();
             const values = [1, 2, 3];
             expect(numberList.values).toBeUndefined();
-            const changed = deserializeCopy(numberListPersistence, numberList, { values });
+            const changed = deserializeCopy(requirePersistence(NumberList), numberList, { values });
             expect(changed).toBe(true);
             expect(numberList.values).toBe(values);
         });
@@ -211,7 +203,7 @@ describe('#deserializeCopy', () => {
             const pointList = new PointList();
             const values = [new Point(1, 1), new Point(2, 2)];
             expect(pointList.values).toBeUndefined();
-            const changed = deserializeCopy(pointListPersistence, pointList, { values });
+            const changed = deserializeCopy(requirePersistence(PointList), pointList, { values });
             expect(changed).toBe(true);
             expect(pointList.values).not.toBe(values);
             expect(pointList.values).toStrictEqual(values);
@@ -221,7 +213,7 @@ describe('#deserializeCopy', () => {
             const pointList = new PointList();
             pointList.values = [new Point(1, 1), new Point(2, 2)];
             const values = [new Point(10, 10), new Point(20, 20), new Point(30, 30)];
-            const changed = deserializeCopy(pointListPersistence, pointList, { values });
+            const changed = deserializeCopy(requirePersistence(PointList), pointList, { values });
             expect(changed).toBe(true);
             expect(pointList.values).not.toBe(values);
             expect(pointList.values).toStrictEqual(values);
@@ -236,7 +228,7 @@ describe('#deserializeCopy', () => {
         it('populated objects in keyed array fields', () => {
             const team = new Team();
             expect(team.members).toBeUndefined();
-            const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toStrictEqual(player1);
@@ -247,7 +239,7 @@ describe('#deserializeCopy', () => {
         it('updates objects in keyed array fields', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamPersistence, team, { members: [{ id: 1, name: 'Player A' }, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [{ id: 1, name: 'Player A' }, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members[0].name).toBe('Player A');
         });
@@ -255,7 +247,7 @@ describe('#deserializeCopy', () => {
         it('adds new objects to keyed array fields', () => {
             const team = new Team();
             team.members = [player2];
-            const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toStrictEqual(player1);
@@ -266,7 +258,7 @@ describe('#deserializeCopy', () => {
         it('removes old objects from keyed array fields', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamPersistence, team, { members: [player3] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(1);
             expect(team.members[0]).toStrictEqual(player3);
@@ -275,7 +267,7 @@ describe('#deserializeCopy', () => {
         it('reorders objects in keyed array fields', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamPersistence, team, { members: [player3, player1, player2] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [player3, player1, player2] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toBe(player3);
@@ -286,7 +278,7 @@ describe('#deserializeCopy', () => {
         it('reorders and updates objects in keyed array fields', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1' }, { id: 2, name: '2' }] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1' }, { id: 2, name: '2' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
@@ -297,7 +289,7 @@ describe('#deserializeCopy', () => {
         it('returns false if objects in keyed array field are unchanged', () => {
             const team = new Team();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(Team), team, { members: [player1, player2, player3] });
             expect(changed).toBe(false);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toBe(player1);
@@ -314,7 +306,7 @@ describe('#deserializeCopy', () => {
         it('populated objects in keyed array fields', () => {
             const team = new TeamModel();
             expect(team.members).toBeUndefined();
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expectModelToStrictEqual(team.members[0], player1);
@@ -325,7 +317,7 @@ describe('#deserializeCopy', () => {
         it('updates objects in keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: 'Player A' }, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 1, name: 'Player A' }, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members[0].name).toBe('Player A');
         });
@@ -333,7 +325,7 @@ describe('#deserializeCopy', () => {
         it('adds new objects to keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player2];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [player1, player2, player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expectModelToStrictEqual(team.members[0], player1);
@@ -344,7 +336,7 @@ describe('#deserializeCopy', () => {
         it('removes old objects from keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [player3] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [player3] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(1);
             expect(team.members[0]).toStrictEqual(player3);
@@ -353,7 +345,7 @@ describe('#deserializeCopy', () => {
         it('reorders objects in keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [player3, player1, player2] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [player3, player1, player2] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toBe(player3);
@@ -364,7 +356,7 @@ describe('#deserializeCopy', () => {
         it('reorders and updates objects in keyed array fields 1', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 2, name: '2' }] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 2, name: '2' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
@@ -375,7 +367,7 @@ describe('#deserializeCopy', () => {
         it('reorders and updates objects in keyed array fields 2', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 2, name: '2' }, { id: 1, name: '1!' }] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 3, name: '3' }, { id: 2, name: '2' }, { id: 1, name: '1!' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
@@ -386,7 +378,7 @@ describe('#deserializeCopy', () => {
         it('reorders and updates objects in keyed array fields 3', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 2, name: '2' }] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 2, name: '2' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 1, name: '1!' });
@@ -397,7 +389,7 @@ describe('#deserializeCopy', () => {
         it('adds, reorders, and updates objects in keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 4, name: '4' }, { id: 2, name: '2' }] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 1, name: '1!' }, { id: 3, name: '3' }, { id: 4, name: '4' }, { id: 2, name: '2' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(4);
             expect(team.members[0]).toMatchObject({ id: 1, name: '1!' });
@@ -409,7 +401,7 @@ describe('#deserializeCopy', () => {
         it('adds, removes, reorders, and updates objects in keyed array fields', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 4, name: '4' }] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [{ id: 3, name: '3' }, { id: 1, name: '1!' }, { id: 4, name: '4' }] });
             expect(changed).toBe(true);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toMatchObject({ id: 3, name: '3' });
@@ -420,7 +412,7 @@ describe('#deserializeCopy', () => {
         it('returns false if objects in keyed array field are unchanged', () => {
             const team = new TeamModel();
             team.members = [player1, player2, player3];
-            const changed = deserializeCopy(teamModelPersistence, team, { members: [player1, player2, player3] });
+            const changed = deserializeCopy(requirePersistence(TeamModel), team, { members: [player1, player2, player3] });
             expect(changed).toBe(false);
             expect(team.members).toHaveLength(3);
             expect(team.members[0]).toBe(player1);
@@ -433,7 +425,7 @@ describe('#deserializeCopy', () => {
         it('initializes maps as needed', () => {
             const set = new VariableSet();
             set.data = null as unknown as Map<string, Variable>;
-            const changed = deserializeCopy(variableSetPersistence, set, { data: {} });
+            const changed = deserializeCopy(requirePersistence(VariableSet), set, { data: {} });
             expect(changed).toBe(true);
             expect(set.data).toBeInstanceOf(Map);
         });
@@ -441,7 +433,7 @@ describe('#deserializeCopy', () => {
         it('populates new values', () => {
             const set = new VariableSet();
             expect(set.data.size).toBe(0);
-            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '10' } } });
+            const changed = deserializeCopy(requirePersistence(VariableSet), set, { data: { x: { type: 'int', value: '10' } } });
             expect(changed).toBe(true);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);
@@ -455,7 +447,7 @@ describe('#deserializeCopy', () => {
             variable.value = '10';
             set.data.set('x', variable);
             expect(set.data.size).toBe(1);
-            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '20' } } });
+            const changed = deserializeCopy(requirePersistence(VariableSet), set, { data: { x: { type: 'int', value: '20' } } });
             expect(changed).toBe(true);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);
@@ -469,7 +461,7 @@ describe('#deserializeCopy', () => {
             variable.value = '10';
             set.data.set('x', variable);
             expect(set.data.size).toBe(1);
-            const changed = deserializeCopy(variableSetPersistence, set, { data: { x: { type: 'int', value: '10' } } });
+            const changed = deserializeCopy(requirePersistence(VariableSet), set, { data: { x: { type: 'int', value: '10' } } });
             expect(changed).toBe(false);
             expect(set.data.size).toBe(1);
             expect(set.data.get('x')).toBeInstanceOf(Variable);

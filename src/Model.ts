@@ -49,7 +49,7 @@ export abstract class Model {
         return this.listeners.length > 0;
     }
 
-    public notifyListeners(...propNames: string[]) {
+    public notifyListeners(...propNames: (string | symbol)[]) {
         if (Array.isArray(propNames) && propNames.length > 0) {
             if (!propNames.some(p => addToSet(this.dirtyProps, p))) {
                 return;
@@ -124,37 +124,25 @@ function hasOverlap<T>(setA: Set<T>, setB: Set<T>): boolean {
 /**
  * Field decorator which injects calls to {@link Model.notifyListeners()} automatically when the field value is changed.
  */
-export function watch<T extends Model>(target: T, propertyKey: string | symbol, prevDesc?: any): any {
-    let initializer = prevDesc && prevDesc.initializer;
-    const getValue = (instance: any) => {
-        if (initializer && !instance.props.has(propertyKey)) {
-            const value = initializer();
-            instance.props.set(propertyKey, value);
-            return value;
-        }
-
-        return instance.props.get(propertyKey);
-    };
-
-    const descriptor: PropertyDescriptor = {
-        get() {
-            return getValue(this);
+export function watch<TThis extends Model>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) {
+    const name = context.name;
+    const result: ClassAccessorDecoratorResult<TThis, any> = {
+        init: function(initialValue: any) {
+            this['props'].set(name, initialValue);
         },
-
-        set(newValue: any) {
-            const value = getValue(this);
+        get: function(this: TThis) {
+            return this['props'].get(name);
+        },
+        set: function(this: TThis, newValue: any) {
+            const value = this['props'].get(name);
             if (newValue !== value) {
-                this.props.set(propertyKey, newValue);
-                this.notifyListeners(propertyKey);
+                this['props'].set(name, newValue);
+                this.notifyListeners(name);
             }
         },
-
-        enumerable: true,
     };
 
-    delete target[propertyKey];
-    Object.defineProperty(target, propertyKey, descriptor);
-    return descriptor;
+    return result;
 }
 
 /**

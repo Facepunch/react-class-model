@@ -1,15 +1,12 @@
 {
   "compilerOptions": {
-    "moduleResolution": "node",
     "lib": ["dom", "es6"],
     "target": "es6",
-    "module": "commonjs",
+    "module": "preserve",
     "declaration": true,
     "outDir": "./dist",
-    "esModuleInterop": true,
-    "experimentalDecorators": true,
     "allowJs": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
   },
   "exclude": [
     "dist/",

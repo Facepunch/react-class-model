@@ -7,10 +7,10 @@ export function expectModelToStrictEqual<T extends Model>(actual: T, expected: T
 
 export class Point {
     @prop()
-    public x: number | undefined;
+    accessor x: number | undefined;
 
     @prop()
-    public y: number | undefined;
+    accessor y: number | undefined;
 
     public z: number | undefined;
 
@@ -23,28 +23,28 @@ export class Point {
 
 export class Line {
     @prop({ ctor: Point })
-    public start: Point;
+    accessor start: Point;
 
     @prop({ ctor: Point })
-    public end: Point;
+    accessor end: Point;
 }
 
 export class NumberList {
     @prop()
-    public values: number[];
+    accessor values: number[];
 }
 
 export class PointList {
     @prop({ ctor: Point })
-    public values: Point[];
+    accessor values: Point[];
 }
 
 export class Player {
     @prop() @key
-    public id: number | undefined;
+    accessor id: number | undefined;
 
     @prop()
-    public name: string | undefined;
+    accessor name: string | undefined;
 
     constructor(id?: number, name?: string) {
         this.id = id;
@@ -54,15 +54,15 @@ export class Player {
 
 export class Team {
     @prop({ ctor: Player })
-    public members: Player[];
+    accessor members: Player[];
 }
 
 export class PlayerModel extends Model {
     @prop() @watch @key
-    public id: number | undefined;
+    accessor id: number | undefined;
 
     @prop() @watch
-    public name: string | undefined;
+    accessor name: string | undefined;
 
     constructor(id?: number, name?: string) {
         super();
@@ -73,18 +73,18 @@ export class PlayerModel extends Model {
 
 export class TeamModel extends Model {
     @prop({ ctor: PlayerModel }) @watch
-    public members: PlayerModel[];
+    accessor members: PlayerModel[];
 }
 
 export class Variable extends Model {
     @prop() @watch
-    public type: string;
+    accessor type: string;
 
     @prop() @watch
-    public value: string;
+    accessor value: string;
 }
 
 export class VariableSet extends Model {
     @prop({ ctor: { value: Variable } }) @watch
-    public data: Map<string, Variable> = new Map();
+    accessor data: Map<string, Variable> = new Map();
 }
