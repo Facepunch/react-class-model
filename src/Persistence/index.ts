@@ -1,5 +1,5 @@
 import { Constructor, AnyTyped, Serializer, Deserializer, InPlaceDeserializer, PropConstructor } from './CommonTypes';
-import { requirePersistence } from './Persistence';
+import { requirePersistence, initializersSymbol } from './Persistence';
 import { Model } from '../Model';
 import { toSerializable, deserializeCopy } from './Serialization';
 import { Field } from './Field';
@@ -82,7 +82,7 @@ export function prop(props?: PropParams) {
     return <TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) => {
         const name = context.name;
         let initialized = false;
-        context.addInitializer(function (this: TThis) {
+        addInitializer(context.metadata, function (ctor: Function) {
             if (initialized) {
                 return;
             }
@@ -93,7 +93,7 @@ export function prop(props?: PropParams) {
                 instance => instance[name],
                 (instance, value) => instance[name] = value);
 
-            requirePersistence(this.constructor, true).add(props?.key || name, field);
+            requirePersistence(ctor, true).add(props?.key || name, field);
         });
     };
 }
@@ -106,13 +106,14 @@ export function prop(props?: PropParams) {
 export function key<TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) {
     const name = context.name;
     let initialized = false;
-    context.addInitializer(function (this: TThis) {
+
+    addInitializer(context.metadata, function (ctor: Function) {
         if (initialized) {
             return;
         }
 
         initialized = true;
-        const persistence = requirePersistence(this.constructor, true);
+        const persistence = requirePersistence(ctor, true);
         persistence.keys.push(name);
     });
 }
@@ -154,4 +155,15 @@ export function setupSerialization<T>(ctor: Constructor<T>, options: Serializati
     persistence.serialize = options.serialize;
     persistence.deserialize = options.deserialize;
     persistence.deserializeInto = options.deserializeInto ?? null;
+}
+
+function addInitializer(metadata: DecoratorMetadataObject, initializer: (ctor: Function) => void) {
+    let initializers = metadata[initializersSymbol] as ((ctor: Function) => void)[] | undefined;
+    
+    if (!Array.isArray(initializers)) {
+        initializers = [];
+        metadata[initializersSymbol] = initializers;
+    }
+
+    initializers.push(initializer);
 }

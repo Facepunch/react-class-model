@@ -1,4 +1,4 @@
-import { Constructor, Deserializer, InPlaceDeserializer, Serializer } from './CommonTypes';
+import { Deserializer, InPlaceDeserializer, Serializer } from './CommonTypes';
 import { Field } from './Field';
 
 export class Persistence {
@@ -40,18 +40,31 @@ export function persistenceRequiredError(ctor: Function): Error {
     return new Error(`Type '${name}' has no persistence defined. Use the @prop decorator to set it up.`);
 }
 
-export function getPersistence(ctor: Function | null | undefined, create: boolean = false) {
-    const key = '__persistence';
+const persistenceSymbol = Symbol('react-class-model:persistence');
+export const initializersSymbol = Symbol('react-class-model:initializers');
 
+export function getPersistence(ctor: Function | null | undefined, create: boolean = false) {
     if (!ctor) {
         return null;
     }
 
-    let value = ctor[key] as Persistence;
+    const metadata = ctor[Symbol.metadata];
+    if (typeof metadata === 'object') {
+        const initializers = metadata[initializersSymbol] as ((ctor: Function) => void)[] | undefined;
+        if (Array.isArray(initializers) && initializers.length > 0) {
+            for (const init of initializers) {
+                init(ctor);
+            }
+
+            initializers.length = 0;
+        }
+    }
+
+    let value = ctor[persistenceSymbol] as Persistence;
 
     if (create && !value) {
         value = new Persistence();
-        ctor[key] = value;
+        ctor[persistenceSymbol] = value;
     }
 
     return value;
