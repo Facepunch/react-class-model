@@ -1,7 +1,38 @@
-import { setupSerialization } from '..';
+import '../../symbol-metadata-shim';
+import { prop, setupSerialization } from '..';
 import { requirePersistence } from '../Persistence';
 import { deserializeCopy, toSerializable } from '../Serialization';
 import { expectModelToStrictEqual, Line, NumberList, Player, PlayerModel, Point, PointList, Team, TeamModel, Variable, VariableSet } from '../TestClasses';
+
+describe('#requirePersistence', () => {
+    it('runs metadata initializers from base classes', () => {
+        class Base {
+            @prop()
+            accessor base: number | undefined;
+        }
+
+        class Derived extends Base {}
+
+        const persistence = requirePersistence(Derived, true);
+        expect(persistence.fields.has('base')).toBe(true);
+    });
+
+    it('reuses base metadata initializers across sibling derived classes', () => {
+        class Base {
+            @prop()
+            accessor base: number | undefined;
+        }
+
+        class DerivedA extends Base {}
+        class DerivedB extends Base {}
+
+        const persistenceA = requirePersistence(DerivedA, true);
+        const persistenceB = requirePersistence(DerivedB, true);
+
+        expect(persistenceA.fields.has('base')).toBe(true);
+        expect(persistenceB.fields.has('base')).toBe(true);
+    });
+});
 
 describe('#toSerializable', () => {
     describe('primitives', () => {

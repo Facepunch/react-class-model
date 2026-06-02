@@ -81,14 +81,7 @@ interface PropParams {
 export function prop(props?: PropParams) {
     return <TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) => {
         const name = context.name;
-        let initialized = false;
         addInitializer(context.metadata, function (ctor: Function) {
-            if (initialized) {
-                return;
-            }
-
-            initialized = true;
-
             const field = new Field(props?.ctor, props?.transient ?? false, props?.copy ?? false,
                 instance => instance[name],
                 (instance, value) => instance[name] = value);
@@ -105,14 +98,8 @@ export function prop(props?: PropParams) {
  */
 export function key<TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) {
     const name = context.name;
-    let initialized = false;
 
     addInitializer(context.metadata, function (ctor: Function) {
-        if (initialized) {
-            return;
-        }
-
-        initialized = true;
         const persistence = requirePersistence(ctor, true);
         persistence.keys.push(name);
     });
