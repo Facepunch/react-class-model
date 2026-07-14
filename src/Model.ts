@@ -12,7 +12,7 @@ import { Constructor } from './Persistence/CommonTypes';
 
 const proxiedValue = 'proxiedValue';
 type ListenerCallback = (version: number) => void;
-type Listener = [ListenerCallback, Set<string> | null];
+type Listener = [ListenerCallback, Set<string | symbol> | null];
 type ProxiedValue<T extends Model | null | undefined> = T extends Model ? T & { [proxiedValue]: T } : T;
 type UseModelFn<T extends Model> = {
     (trackChanges?: true): ProxiedValue<T>;
@@ -42,7 +42,8 @@ type DefineResult<T extends Model> = [
 export abstract class Model {
     private version: number = 1;
     private listeners: Listener[] = [];
-    private dirtyProps: Set<string> = new Set();
+    private rawReceiverProps = new Set<string | symbol>();
+    private dirtyProps: Set<string | symbol> = new Set();
     private props: Map<string | symbol, any> = new Map();
 
     public get hasListeners() {
@@ -85,7 +86,7 @@ export abstract class Model {
         });
     }
 
-    public addListener(listener: ListenerCallback, props?: Set<string>) {
+    public addListener(listener: ListenerCallback, props?: Set<string | symbol>) {
         this.listeners.push([listener, props ?? null]);
 
         if (this.listeners.length > 100) {
@@ -99,6 +100,16 @@ export abstract class Model {
 
     protected handleError(e: any) {
         console.error(e);
+    }
+
+    /** @internal */
+    public markAsRawReceiverProp(prop: string | symbol) {
+        this.rawReceiverProps.add(prop);
+    }
+
+    /** @internal */
+    public isRawReceiverProp(prop: string | symbol) {
+        return this.rawReceiverProps.has(prop);
     }
 }
 
@@ -153,7 +164,7 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
     const context = createContext<T>(null as unknown as T);
     context.displayName = ctor?.name;
 
-    function useModel(trackChanges: true): ProxiedValue<T>;
+    function useModel(trackChanges: true | undefined): ProxiedValue<T>;
     function useModel(trackChanges: false): T;
     function useModel(trackChanges: boolean = true) {
         const value = useContext<T>(context);
@@ -205,19 +216,36 @@ function watchModel<T extends Model | null | undefined>(...models: T[]): Proxied
         : modelListeners.map(t => t[1]);
 }
 
-function createListener<T extends Model | null | undefined>(model: T): [T, ProxiedValue<T>, Set<string>] {
-    const props = new Set<string>();
+function createListener<T extends Model | null | undefined>(model: T): [T, ProxiedValue<T>, Set<string | symbol>] {
+    const props = new Set<string | symbol>();
     const handler: ProxyHandler<T & Model> = {
-        get(target, prop) {
+        get(target, prop, receiver) {
             if (typeof prop === 'string') {
                 if (prop === proxiedValue) {
                     return model;
                 }
 
-                props.add(prop);
+                if (prop !== 'props' && prop !== 'version' && prop !== 'listeners' && prop !== 'dirtyProps') {
+                    props.add(prop);
+                }
+            }
+
+            if (target.isRawReceiverProp(prop)) {
+                return Reflect.get(target, prop, target);
             }
             
-            return target[prop];
+            try {
+                return Reflect.get(target, prop, receiver);
+            } catch (e) {
+                // Getters/accessors that read private fields can't run on the proxy.
+                // They don't expose watched state through the proxy anyway, so reading
+                // them with this = target loses nothing for change tracking.
+                if (e instanceof TypeError) {
+                    target.markAsRawReceiverProp(prop);
+                    return Reflect.get(target, prop, target);
+                }
+                throw e;
+            }
         }
     };
 

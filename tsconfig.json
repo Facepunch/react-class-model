@@ -7,6 +7,7 @@
     "outDir": "./dist",
     "allowJs": true,
     "strictNullChecks": true,
+    "stripInternal": true,
   },
   "exclude": [
     "dist/",
