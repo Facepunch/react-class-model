@@ -2,7 +2,7 @@ import {
     Context,
     createContext,
     useContext,
-    useState,
+    useReducer,
     ProviderExoticComponent,
     ProviderProps,
     useEffect,
@@ -41,6 +41,7 @@ type DefineResult<T extends Model> = [
  */
 export abstract class Model {
     private version: number = 1;
+    private flushScheduled: boolean = false;
     private listeners: Listener[] = [];
     private rawReceiverProps = new Set<string | symbol>();
     private dirtyProps: Set<string | symbol> = new Set();
@@ -51,24 +52,32 @@ export abstract class Model {
     }
 
     public notifyListeners(...propNames: (string | symbol)[]) {
-        if (Array.isArray(propNames) && propNames.length > 0) {
-            if (!propNames.some(p => addToSet(this.dirtyProps, p))) {
-                return;
-            }
-        } else if (!addToSet(this.dirtyProps, '*')) {
+        const names = propNames.length > 0 ? propNames : ['*'];
+        for (const name of names) {
+            this.dirtyProps.add(name);
+        }
+
+        // Always increment version (monotonically) so it is possible to check for external changes
+        this.version++;
+
+        if (this.flushScheduled) {
             return;
         }
-        
-        this.version++;
-        if (this.version > 100000) {
-            this.version = 1;
-        }
-        
+
+        this.flushScheduled = true;
         enqueue(() => {
-            for (let i = 0; i < this.listeners.length; i++) {
-                const [callback, props] = this.listeners[i];
+            this.flushScheduled = false;
+
+            // Swap rather than clear, so changes made by a listener get their own flush instead of being cleared out from under the next one
+            const dirty = this.dirtyProps;
+            this.dirtyProps = new Set();
+
+            const version = this.version;
+
+            // Snapshot: removeListener reassigns this.listeners mid-iteration.
+            for (const [callback, props] of this.listeners.slice()) {
                 const isRelevant = props instanceof Set
-                    ? this.dirtyProps.has('*') || hasOverlap(this.dirtyProps, props)
+                    ? dirty.has('*') || hasOverlap(dirty, props)
                     : true;
 
                 if (!isRelevant) {
@@ -76,13 +85,11 @@ export abstract class Model {
                 }
 
                 try {
-                    callback(this.version);
+                    callback(version);
                 } catch (e) {
                     this.handleError(e);
                 }
             }
-
-            this.dirtyProps.clear();
         });
     }
 
@@ -110,15 +117,6 @@ export abstract class Model {
     /** @internal */
     public isRawReceiverProp(prop: string | symbol) {
         return this.rawReceiverProps.has(prop);
-    }
-}
-
-function addToSet<T>(set: Set<T>, value: T): boolean {
-    if (set.has(value)) {
-        return false;
-    } else {
-        set.add(value);
-        return true;
     }
 }
 
@@ -190,18 +188,27 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
 
 function watchModel<T extends Model | null | undefined>(moddel: T) : ProxiedValue<T>;
 function watchModel<T extends Model | null | undefined>(...models: T[]): ProxiedValue<T> | ProxiedValue<T>[] {   
-    const [, setState] = useState(0);
-    const modelListeners = useMemo(() => models.map(createListener), models)
+    const [, forceRender] = useReducer((c: number) => c + 1, 0);
+    const modelListeners = useMemo(() => models.map(createListener), models);
+
+    const validModels = modelListeners.filter(t => t[0] instanceof Model);
+    const renderVersions = validModels.map(([model]) => (model as Model)['version']);
 
     useEffect(() => {
-        const validModels = modelListeners.filter(t => t[0] instanceof Model);
         for (const [model, , props] of validModels) {
-            model?.addListener(setState, props);
+            (model as Model).addListener(forceRender, props);
+        }
+
+        // addListener runs on commit, so anything that changed between render and now was
+        // dispatched to zero listeners. Reconcile by re-rendering if we missed a version.
+        const missed = validModels.some(([model], i) => (model as Model)['version'] !== renderVersions[i]);
+        if (missed) {
+            forceRender();
         }
 
         return () => {
             for (const [model] of validModels) {
-                model?.removeListener(setState);
+                (model as Model).removeListener(forceRender);
             }
         }
     }, modelListeners);
@@ -269,16 +276,39 @@ function enqueue(task: () => void) {
 
 function flushTasks() {
     while (taskQueue.length > 0) {
-        const task = taskQueue.pop();
-        task?.();
+        const batch = taskQueue.splice(0, taskQueue.length);
+        for (const task of batch) {
+            task();
+        }
     }
 }
 
 function getScheduler(): (fn: () => any) => void {
-    if (typeof window === 'object' && typeof window['setImmediate'] === 'function') {
-        return window['setImmediate'];
+    // React Native (and Node) expose setImmediate, which runs right after the current
+    // execution completes with no timer clamping. Preferred where it genuinely exists.
+    const globalSetImmediate = (globalThis as any).setImmediate as ((fn: () => any) => void) | undefined;
+    if (typeof globalSetImmediate === 'function') {
+        return fn => globalSetImmediate(fn);
     }
 
-    // TODO: good fallbacks
+    // Browsers: MessageChannel is the same mechanism React's own scheduler uses, so
+    // notifications land in the same task class as passive effects instead of being
+    // pushed behind setTimeout's 4ms clamp.
+    if (typeof MessageChannel === 'function') {
+        const channel = new MessageChannel();
+        const pending: (() => any)[] = [];
+
+        channel.port1.onmessage = () => {
+            // Shift one per message so the 1:1 pairing with postMessage holds even if
+            // a callback schedules more work while draining.
+            pending.shift()?.();
+        };
+
+        return fn => {
+            pending.push(fn);
+            channel.port2.postMessage(null);
+        };
+    }
+
     return fn => setTimeout(fn, 0);
 }
