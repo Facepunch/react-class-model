@@ -17,16 +17,13 @@ type ProxiedValue<T extends Model | null | undefined> = T extends Model ? T & { 
 type UseModelFn<T extends Model> = {
     (trackChanges?: true): ProxiedValue<T>;
     (trackChanges: false): T;
+    (trackChanges: boolean): ProxiedValue<T> | T;
 };
 type WatchModelFn<T extends Model> = {
     (model: T): ProxiedValue<T>;
     (model: T | null): ProxiedValue<T> | null;
     (model: T | undefined): ProxiedValue<T> | undefined;
     (model: T | null | undefined): ProxiedValue<T> | null | undefined;
-    (...models: T[]): ProxiedValue<T>[];
-    (...models: (T | null)[]): (ProxiedValue<T> | null)[];
-    (...models: (T | undefined)[]): (ProxiedValue<T> | undefined)[];
-    (...models: (T | null | undefined)[]): (ProxiedValue<T> | null | undefined)[];
 };
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
@@ -164,17 +161,14 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
 
     function useModel(trackChanges: true | undefined): ProxiedValue<T>;
     function useModel(trackChanges: false): T;
+    function useModel(trackChanges: boolean): T | ProxiedValue<T>;
     function useModel(trackChanges: boolean = true) {
         const value = useContext<T>(context);
         if (!value) {
             throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
         }
     
-        if (trackChanges) {
-            return watchModel(value);
-        } else {
-            return value;
-        }
+        return watchModelImpl(value, trackChanges);
     }
 
     return [
@@ -186,44 +180,49 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
 }
 
 
-function watchModel<T extends Model | null | undefined>(moddel: T) : ProxiedValue<T>;
-function watchModel<T extends Model | null | undefined>(...models: T[]): ProxiedValue<T> | ProxiedValue<T>[] {   
-    const [, forceRender] = useReducer((c: number) => c + 1, 0);
-    const modelListeners = useMemo(() => models.map(createListener), models);
+function watchModel<T extends Model | null | undefined>(model: T) : ProxiedValue<T> {
+    return watchModelImpl(model, true);
+}
 
-    const validModels = modelListeners.filter(t => t[0] instanceof Model);
-    const renderVersions = validModels.map(([model]) => (model as Model)['version']);
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: true): ProxiedValue<T>;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: false): T;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: boolean): T | ProxiedValue<T>;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: boolean): T | ProxiedValue<T> {
+    const [, forceRender] = useReducer((c: number) => c + 1, 0);
+    const [proxy, props] = useMemo(() => createListener(model), [model]);
+
+    const renderVersion = model instanceof Model ? (model as Model)['version'] : 0;
 
     useEffect(() => {
-        for (const [model, , props] of validModels) {
-            (model as Model).addListener(forceRender, props);
+        if (!enabled) {
+            return;
+        }
+
+        if (model instanceof Model) {
+            model.addListener(forceRender, props);
         }
 
         // addListener runs on commit, so anything that changed between render and now was
         // dispatched to zero listeners. Reconcile by re-rendering if we missed a version.
-        const missed = validModels.some(([model], i) => (model as Model)['version'] !== renderVersions[i]);
+        const missed = model instanceof Model && model['version'] !== renderVersion;
         if (missed) {
             forceRender();
         }
 
         return () => {
-            for (const [model] of validModels) {
-                (model as Model).removeListener(forceRender);
+            if (model instanceof Model) {
+                model.removeListener(forceRender);
             }
         }
-    }, modelListeners);
+    }, [enabled, proxy, props]);
 
     // reset the touched props because the component should be re-rendering now and will touch them again
-    for (const [, , props] of modelListeners) {
-        props.clear();
-    }
+    props.clear();
 
-    return models.length === 1
-        ? modelListeners[0][1]
-        : modelListeners.map(t => t[1]);
+    return enabled ? proxy : model;
 }
 
-function createListener<T extends Model | null | undefined>(model: T): [T, ProxiedValue<T>, Set<string | symbol>] {
+function createListener<T extends Model | null | undefined>(model: T): [ProxiedValue<T>, Set<string | symbol>] {
     const props = new Set<string | symbol>();
     const handler: ProxyHandler<T & Model> = {
         get(target, prop, receiver) {
@@ -260,7 +259,7 @@ function createListener<T extends Model | null | undefined>(model: T): [T, Proxi
         ? new Proxy(model, handler)
         : model;
 
-    return [model, proxy as ProxiedValue<T>, props];
+    return [proxy as ProxiedValue<T>, props];
 }
 
 const scheduler = getScheduler();

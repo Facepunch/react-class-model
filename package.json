@@ -1,6 +1,6 @@
 {
   "name": "react-class-model",
-  "version": "0.0.17-alpha.9",
+  "version": "0.0.17-alpha.10",
   "description": "State management for React with hooks, inspired by Flutter's scoped_model",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
