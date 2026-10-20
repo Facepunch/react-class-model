@@ -1,5 +1,5 @@
 import { Constructor, AnyTyped, Serializer, Deserializer, InPlaceDeserializer, PropConstructor } from './CommonTypes';
-import { requirePersistence, getPersistence } from './Persistence';
+import { requirePersistence, initializersSymbol } from './Persistence';
 import { Model } from '../Model';
 import { toSerializable, deserializeCopy } from './Serialization';
 import { Field } from './Field';
@@ -35,7 +35,7 @@ export function deserialize<T extends Model>(ctor: Constructor<T>, json: string)
  * @remarks This performs deserialization logic according to {@link prop()} decorators on the model type.
  */
 export function deserializeInto<T extends Model>(value: T, json: string) {
-    const persistence = requirePersistence(value);
+    const persistence = requirePersistence(value.constructor);
     const obj = JSON.parse(json) as Object;
     return deserializeCopy(persistence, value, obj);
 }
@@ -47,7 +47,7 @@ export function deserializeInto<T extends Model>(value: T, json: string) {
  * @remarks This performs deserialization logic according to {@link prop()} decorators on the model type.
  */
 export function copyInto<TInstance extends Model & AnyTyped<TProps>, TProps extends Object>(value: TInstance, props: TProps) {
-    const persistence = requirePersistence(value);
+    const persistence = requirePersistence(value.constructor);
     return deserializeCopy(persistence, value, props);
 }
 
@@ -79,12 +79,15 @@ interface PropParams {
  * @param props Parameters on how to handle serialization of this field.
  */
 export function prop(props?: PropParams) {
-    return <T>(target: T, propertyName: string, ...a: any[]) => {
-        const field = new Field(props?.ctor, props?.transient ?? false, props?.copy ?? false,
-            instance => instance[propertyName],
-            (instance, value) => instance[propertyName] = value);
+    return <TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) => {
+        const name = context.name;
+        addInitializer(context.metadata, function (ctor: Function) {
+            const field = new Field(props?.ctor, props?.transient ?? false, props?.copy ?? false,
+                instance => instance[name],
+                (instance, value) => instance[name] = value);
 
-        requirePersistence(target, true).add(props?.key || propertyName, field);
+            requirePersistence(ctor, true).add(props?.key || name, field);
+        });
     };
 }
 
@@ -93,9 +96,13 @@ export function prop(props?: PropParams) {
  * This allows instances within arrays to be updated without creating a new instance of the model.
  * Multiple fields may be marked as keys to form a composite key.
  */
-export function key<T>(target: T, propertyKey: string, prevDesc?: any): any {
-    const persistence = requirePersistence(target, true);
-    persistence.keys.push(propertyKey);
+export function key<TThis extends Object>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) {
+    const name = context.name;
+
+    addInitializer(context.metadata, function (ctor: Function) {
+        const persistence = requirePersistence(ctor, true);
+        persistence.keys.push(name);
+    });
 }
 
 interface SerializationOptions<T> {
@@ -135,4 +142,15 @@ export function setupSerialization<T>(ctor: Constructor<T>, options: Serializati
     persistence.serialize = options.serialize;
     persistence.deserialize = options.deserialize;
     persistence.deserializeInto = options.deserializeInto ?? null;
+}
+
+function addInitializer(metadata: DecoratorMetadataObject, initializer: (ctor: Function) => void) {
+    let initializers = metadata[initializersSymbol] as ((ctor: Function) => void)[] | undefined;
+    
+    if (!Array.isArray(initializers)) {
+        initializers = [];
+        metadata[initializersSymbol] = initializers;
+    }
+
+    initializers.push(initializer);
 }

@@ -2,7 +2,7 @@ import {
     Context,
     createContext,
     useContext,
-    useState,
+    useReducer,
     ProviderExoticComponent,
     ProviderProps,
     useEffect,
@@ -12,21 +12,18 @@ import { Constructor } from './Persistence/CommonTypes';
 
 const proxiedValue = 'proxiedValue';
 type ListenerCallback = (version: number) => void;
-type Listener = [ListenerCallback, Set<string> | null];
+type Listener = [ListenerCallback, Set<string | symbol> | null];
 type ProxiedValue<T extends Model | null | undefined> = T extends Model ? T & { [proxiedValue]: T } : T;
 type UseModelFn<T extends Model> = {
     (trackChanges?: true): ProxiedValue<T>;
     (trackChanges: false): T;
+    (trackChanges: boolean): ProxiedValue<T> | T;
 };
 type WatchModelFn<T extends Model> = {
     (model: T): ProxiedValue<T>;
     (model: T | null): ProxiedValue<T> | null;
     (model: T | undefined): ProxiedValue<T> | undefined;
     (model: T | null | undefined): ProxiedValue<T> | null | undefined;
-    (...models: T[]): ProxiedValue<T>[];
-    (...models: (T | null)[]): (ProxiedValue<T> | null)[];
-    (...models: (T | undefined)[]): (ProxiedValue<T> | undefined)[];
-    (...models: (T | null | undefined)[]): (ProxiedValue<T> | null | undefined)[];
 };
 type DefineResult<T extends Model> = [
     ProviderExoticComponent<ProviderProps<T>>,
@@ -41,33 +38,43 @@ type DefineResult<T extends Model> = [
  */
 export abstract class Model {
     private version: number = 1;
+    private flushScheduled: boolean = false;
     private listeners: Listener[] = [];
-    private dirtyProps: Set<string> = new Set();
+    private rawReceiverProps = new Set<string | symbol>();
+    private dirtyProps: Set<string | symbol> = new Set();
     private props: Map<string | symbol, any> = new Map();
 
     public get hasListeners() {
         return this.listeners.length > 0;
     }
 
-    public notifyListeners(...propNames: string[]) {
-        if (Array.isArray(propNames) && propNames.length > 0) {
-            if (!propNames.some(p => addToSet(this.dirtyProps, p))) {
-                return;
-            }
-        } else if (!addToSet(this.dirtyProps, '*')) {
+    public notifyListeners(...propNames: (string | symbol)[]) {
+        const names = propNames.length > 0 ? propNames : ['*'];
+        for (const name of names) {
+            this.dirtyProps.add(name);
+        }
+
+        // Always increment version (monotonically) so it is possible to check for external changes
+        this.version++;
+
+        if (this.flushScheduled) {
             return;
         }
-        
-        this.version++;
-        if (this.version > 100000) {
-            this.version = 1;
-        }
-        
+
+        this.flushScheduled = true;
         enqueue(() => {
-            for (let i = 0; i < this.listeners.length; i++) {
-                const [callback, props] = this.listeners[i];
+            this.flushScheduled = false;
+
+            // Swap rather than clear, so changes made by a listener get their own flush instead of being cleared out from under the next one
+            const dirty = this.dirtyProps;
+            this.dirtyProps = new Set();
+
+            const version = this.version;
+
+            // Snapshot: removeListener reassigns this.listeners mid-iteration.
+            for (const [callback, props] of this.listeners.slice()) {
                 const isRelevant = props instanceof Set
-                    ? this.dirtyProps.has('*') || hasOverlap(this.dirtyProps, props)
+                    ? dirty.has('*') || hasOverlap(dirty, props)
                     : true;
 
                 if (!isRelevant) {
@@ -75,17 +82,15 @@ export abstract class Model {
                 }
 
                 try {
-                    callback(this.version);
+                    callback(version);
                 } catch (e) {
                     this.handleError(e);
                 }
             }
-
-            this.dirtyProps.clear();
         });
     }
 
-    public addListener(listener: ListenerCallback, props?: Set<string>) {
+    public addListener(listener: ListenerCallback, props?: Set<string | symbol>) {
         this.listeners.push([listener, props ?? null]);
 
         if (this.listeners.length > 100) {
@@ -100,14 +105,15 @@ export abstract class Model {
     protected handleError(e: any) {
         console.error(e);
     }
-}
 
-function addToSet<T>(set: Set<T>, value: T): boolean {
-    if (set.has(value)) {
-        return false;
-    } else {
-        set.add(value);
-        return true;
+    /** @internal */
+    public markAsRawReceiverProp(prop: string | symbol) {
+        this.rawReceiverProps.add(prop);
+    }
+
+    /** @internal */
+    public isRawReceiverProp(prop: string | symbol) {
+        return this.rawReceiverProps.has(prop);
     }
 }
 
@@ -124,37 +130,25 @@ function hasOverlap<T>(setA: Set<T>, setB: Set<T>): boolean {
 /**
  * Field decorator which injects calls to {@link Model.notifyListeners()} automatically when the field value is changed.
  */
-export function watch<T extends Model>(target: T, propertyKey: string | symbol, prevDesc?: any): any {
-    let initializer = prevDesc && prevDesc.initializer;
-    const getValue = (instance: any) => {
-        if (initializer && !instance.props.has(propertyKey)) {
-            const value = initializer();
-            instance.props.set(propertyKey, value);
-            return value;
-        }
-
-        return instance.props.get(propertyKey);
-    };
-
-    const descriptor: PropertyDescriptor = {
-        get() {
-            return getValue(this);
+export function watch<TThis extends Model>(target: ClassAccessorDecoratorTarget<TThis, any>, context: ClassAccessorDecoratorContext<TThis>) {
+    const name = context.name;
+    const result: ClassAccessorDecoratorResult<TThis, any> = {
+        init: function(initialValue: any) {
+            this['props'].set(name, initialValue);
         },
-
-        set(newValue: any) {
-            const value = getValue(this);
+        get: function(this: TThis) {
+            return this['props'].get(name);
+        },
+        set: function(this: TThis, newValue: any) {
+            const value = this['props'].get(name);
             if (newValue !== value) {
-                this.props.set(propertyKey, newValue);
-                this.notifyListeners(propertyKey);
+                this['props'].set(name, newValue);
+                this.notifyListeners(name);
             }
         },
-
-        enumerable: true,
     };
 
-    delete target[propertyKey];
-    Object.defineProperty(target, propertyKey, descriptor);
-    return descriptor;
+    return result;
 }
 
 /**
@@ -165,19 +159,16 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
     const context = createContext<T>(null as unknown as T);
     context.displayName = ctor?.name;
 
-    function useModel(trackChanges: true): ProxiedValue<T>;
+    function useModel(trackChanges: true | undefined): ProxiedValue<T>;
     function useModel(trackChanges: false): T;
+    function useModel(trackChanges: boolean): T | ProxiedValue<T>;
     function useModel(trackChanges: boolean = true) {
         const value = useContext<T>(context);
         if (!value) {
             throw new Error(`useModel: No provider found for model ${context?.displayName ?? '<unknown>'}`);
         }
     
-        if (trackChanges) {
-            return watchModel(value);
-        } else {
-            return value;
-        }
+        return watchModelImpl(value, trackChanges);
     }
 
     return [
@@ -189,47 +180,78 @@ export function defineModel<T extends Model>(ctor?: Constructor<T>): DefineResul
 }
 
 
-function watchModel<T extends Model | null | undefined>(moddel: T) : ProxiedValue<T>;
-function watchModel<T extends Model | null | undefined>(...models: T[]): ProxiedValue<T> | ProxiedValue<T>[] {   
-    const [, setState] = useState(0);
-    const modelListeners = useMemo(() => models.map(createListener), models)
+function watchModel<T extends Model | null | undefined>(model: T) : ProxiedValue<T> {
+    return watchModelImpl(model, true);
+}
+
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: true): ProxiedValue<T>;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: false): T;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: boolean): T | ProxiedValue<T>;
+function watchModelImpl<T extends Model | null | undefined>(model: T, enabled: boolean): T | ProxiedValue<T> {
+    const [, forceRender] = useReducer((c: number) => c + 1, 0);
+    const [proxy, props] = useMemo(() => createListener(model), [model]);
+
+    const renderVersion = model instanceof Model ? (model as Model)['version'] : 0;
 
     useEffect(() => {
-        const validModels = modelListeners.filter(t => t[0] instanceof Model);
-        for (const [model, , props] of validModels) {
-            model?.addListener(setState, props);
+        if (!enabled) {
+            return;
+        }
+
+        if (model instanceof Model) {
+            model.addListener(forceRender, props);
+        }
+
+        // addListener runs on commit, so anything that changed between render and now was
+        // dispatched to zero listeners. Reconcile by re-rendering if we missed a version.
+        const missed = model instanceof Model && model['version'] !== renderVersion;
+        if (missed) {
+            forceRender();
         }
 
         return () => {
-            for (const [model] of validModels) {
-                model?.removeListener(setState);
+            if (model instanceof Model) {
+                model.removeListener(forceRender);
             }
         }
-    }, modelListeners);
+    }, [enabled, proxy, props]);
 
     // reset the touched props because the component should be re-rendering now and will touch them again
-    for (const [, , props] of modelListeners) {
-        props.clear();
-    }
+    props.clear();
 
-    return models.length === 1
-        ? modelListeners[0][1]
-        : modelListeners.map(t => t[1]);
+    return enabled ? proxy : model;
 }
 
-function createListener<T extends Model | null | undefined>(model: T): [T, ProxiedValue<T>, Set<string>] {
-    const props = new Set<string>();
+function createListener<T extends Model | null | undefined>(model: T): [ProxiedValue<T>, Set<string | symbol>] {
+    const props = new Set<string | symbol>();
     const handler: ProxyHandler<T & Model> = {
-        get(target, prop) {
+        get(target, prop, receiver) {
             if (typeof prop === 'string') {
                 if (prop === proxiedValue) {
                     return model;
                 }
 
-                props.add(prop);
+                if (prop !== 'props' && prop !== 'version' && prop !== 'listeners' && prop !== 'dirtyProps') {
+                    props.add(prop);
+                }
+            }
+
+            if (target.isRawReceiverProp(prop)) {
+                return Reflect.get(target, prop, target);
             }
             
-            return target[prop];
+            try {
+                return Reflect.get(target, prop, receiver);
+            } catch (e) {
+                // Getters/accessors that read private fields can't run on the proxy.
+                // They don't expose watched state through the proxy anyway, so reading
+                // them with this = target loses nothing for change tracking.
+                if (e instanceof TypeError) {
+                    target.markAsRawReceiverProp(prop);
+                    return Reflect.get(target, prop, target);
+                }
+                throw e;
+            }
         }
     };
 
@@ -237,7 +259,7 @@ function createListener<T extends Model | null | undefined>(model: T): [T, Proxi
         ? new Proxy(model, handler)
         : model;
 
-    return [model, proxy as ProxiedValue<T>, props];
+    return [proxy as ProxiedValue<T>, props];
 }
 
 const scheduler = getScheduler();
@@ -253,16 +275,39 @@ function enqueue(task: () => void) {
 
 function flushTasks() {
     while (taskQueue.length > 0) {
-        const task = taskQueue.pop();
-        task?.();
+        const batch = taskQueue.splice(0, taskQueue.length);
+        for (const task of batch) {
+            task();
+        }
     }
 }
 
 function getScheduler(): (fn: () => any) => void {
-    if (typeof window === 'object' && typeof window['setImmediate'] === 'function') {
-        return window['setImmediate'];
+    // React Native (and Node) expose setImmediate, which runs right after the current
+    // execution completes with no timer clamping. Preferred where it genuinely exists.
+    const globalSetImmediate = (globalThis as any).setImmediate as ((fn: () => any) => void) | undefined;
+    if (typeof globalSetImmediate === 'function') {
+        return fn => globalSetImmediate(fn);
     }
 
-    // TODO: good fallbacks
+    // Browsers: MessageChannel is the same mechanism React's own scheduler uses, so
+    // notifications land in the same task class as passive effects instead of being
+    // pushed behind setTimeout's 4ms clamp.
+    if (typeof MessageChannel === 'function') {
+        const channel = new MessageChannel();
+        const pending: (() => any)[] = [];
+
+        channel.port1.onmessage = () => {
+            // Shift one per message so the 1:1 pairing with postMessage holds even if
+            // a callback schedules more work while draining.
+            pending.shift()?.();
+        };
+
+        return fn => {
+            pending.push(fn);
+            channel.port2.postMessage(null);
+        };
+    }
+
     return fn => setTimeout(fn, 0);
 }
