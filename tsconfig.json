@@ -13,5 +13,6 @@
     "dist/",
     "coverage/",
     "src/**/*.test.ts",
+    "src/**/TestClasses.ts",
   ],
 }

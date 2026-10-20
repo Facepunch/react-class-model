@@ -3,14 +3,14 @@ State management for React with hooks, inspired by Flutter's `scoped_model`.
 
 ## Example
 
-Defining models is done by creating a class which extends `Model`. The `@watch` decorators provide automatic model updates when fields are changed.
+Defining models is done by creating a class which extends `Model`. The `@watch` decorators provide automatic model updates when fields are changed. Decorated fields must be declared with the `accessor` keyword, since they use [standard decorators](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html#decorators).
 
 ```ts
 import { Model, watch, defineModel } from 'react-class-model';
 
 export class CounterModel extends Model {
     @watch
-    public value: number = 0;
+    public accessor value: number = 0;
 
     public reset() {
         this.value = 0;
